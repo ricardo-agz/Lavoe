@@ -199,7 +199,7 @@ export default function BeatMaker() {
   return (
     <div className="flex min-h-screen bg-gray-900 text-white">
       {/* Left Sidebar with Tracks */}
-      <div className="w-64 border-r border-gray-700">
+      <div className="w-auto border-r border-gray-700">
         <TracksSidebar 
           tracks={tracks}
           onVolumeChange={handleVolumeChange}
