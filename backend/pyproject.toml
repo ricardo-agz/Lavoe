@@ -13,4 +13,5 @@ dependencies = [
     "python-multipart>=0.0.6",
     "soundfile>=0.12.1",
     "ipython>=9.5.0",
+    "pedalboard>=0.8.0",
 ]
