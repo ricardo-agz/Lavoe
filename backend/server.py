@@ -5,6 +5,7 @@ import io
 import logging
 from contextlib import asynccontextmanager
 
+import httpx
 import librosa
 import soundfile as sf
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Request
