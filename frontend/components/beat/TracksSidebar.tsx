@@ -4,21 +4,30 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Volume2, Mic, Plus, MoreHorizontal } from "lucide-react";
+import { Volume2, Mic, Plus, MoreHorizontal, Upload, FileAudio } from "lucide-react";
 import { Track } from "./types";
+import { FileUpload } from "./FileUpload";
+import { AudioPlayer } from "./AudioPlayer";
+import { RecordingComponent } from "./RecordingComponent";
 
 interface TracksSidebarProps {
   tracks: Track[];
   onVolumeChange: (trackId: string, volume: number) => void;
   onMuteToggle: (trackId: string) => void;
+  onAddTrack: () => void;
+  onFileUpload: (file: File) => void;
+  onRecordingComplete: (audioBlob: Blob) => void;
 }
 
 export function TracksSidebar({
   tracks,
   onVolumeChange,
   onMuteToggle,
+  onAddTrack,
+  onFileUpload,
+  onRecordingComplete,
 }: TracksSidebarProps) {
-  const [activeView, setActiveView] = useState<"tracks" | "record" | null>(
+  const [activeView, setActiveView] = useState<"tracks" | "record" | "upload" | null>(
     null
   );
 
@@ -100,6 +109,27 @@ export function TracksSidebar({
               </div>
               <span className="text-[11px] text-muted-foreground">Record</span>
             </Button>
+
+            <Button
+              variant="ghost"
+              className={`w-16 h-16 rounded-xl flex flex-col items-center justify-center gap-2 group ${
+                activeView === "upload" ? "bg-muted/50" : "hover:bg-muted/30"
+              }`}
+              onClick={() =>
+                setActiveView(activeView === "upload" ? null : "upload")
+              }
+            >
+              <div
+                className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
+                  activeView === "upload"
+                    ? "bg-indigo-500"
+                    : "bg-muted group-hover:bg-muted/80"
+                }`}
+              >
+                <Upload className="h-4.5 w-4.5 text-white" />
+              </div>
+              <span className="text-[11px] text-muted-foreground">Upload</span>
+            </Button>
           </div>
         </div>
 
@@ -114,6 +144,7 @@ export function TracksSidebar({
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7 rounded-md ml-auto hover:bg-muted"
+                onClick={onAddTrack}
               >
                 <Plus className="h-3.5 w-3.5 text-muted-foreground" />
               </Button>
@@ -134,6 +165,9 @@ export function TracksSidebar({
                         <span className="text-xs font-medium text-foreground">
                           {track.name}
                         </span>
+                        {(track.audioFile || track.audioBlob) && (
+                          <FileAudio className="h-3 w-3 text-muted-foreground" />
+                        )}
                       </div>
                       <div className="flex items-center">
                         <Button
@@ -171,6 +205,18 @@ export function TracksSidebar({
                         className={track.muted ? "opacity-50" : ""}
                       />
                     </div>
+                    
+                    {(track.audioFile || track.audioBlob) && (
+                      <div className="px-3 mt-2">
+                        <AudioPlayer
+                          audioFile={track.audioFile}
+                          audioBlob={track.audioBlob}
+                          volume={track.volume}
+                          muted={track.muted}
+                          trackId={track.id}
+                        />
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -179,23 +225,17 @@ export function TracksSidebar({
         )}
 
         {activeView === "record" && (
-          <div className="w-[250px] bg-background border-t border-border">
-            <div className="h-14 flex items-center px-4">
-              <span className="text-sm font-medium text-foreground">
-                Record
-              </span>
-            </div>
+          <RecordingComponent
+            onRecordingComplete={onRecordingComplete}
+            onCancel={() => setActiveView(null)}
+          />
+        )}
 
-            <div className="p-4">
-              <Button
-                variant="secondary"
-                className="w-full h-10 bg-muted/50 hover:bg-muted text-foreground rounded-lg"
-              >
-                <Mic className="mr-2 h-3.5 w-3.5" />
-                Click to Record
-              </Button>
-            </div>
-          </div>
+        {activeView === "upload" && (
+          <FileUpload
+            onFileUpload={onFileUpload}
+            onCancel={() => setActiveView(null)}
+          />
         )}
       </div>
     </div>
