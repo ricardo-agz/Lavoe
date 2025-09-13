@@ -185,8 +185,8 @@ export default function TracksPanel({ refreshTrigger }: TracksPanelProps) {
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="p-4 border-b border-border">
+    <div className="flex flex-col h-full max-h-full overflow-hidden">
+      <div className="flex-shrink-0 p-4 border-b border-border">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold">Audio Tracks</h3>
           <Button
@@ -200,7 +200,9 @@ export default function TracksPanel({ refreshTrigger }: TracksPanelProps) {
         </div>
       </div>
 
-      <ScrollArea className="flex-1 p-4">
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <ScrollArea className="h-full">
+          <div className="p-4">
         {loading ? (
           <div className="flex items-center justify-center h-32">
             <div className="text-center">
@@ -222,9 +224,12 @@ export default function TracksPanel({ refreshTrigger }: TracksPanelProps) {
                 <CardHeader className="pb-2">
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
-                      <CardTitle className="text-sm font-medium truncate">
+                      <CardTitle className="text-sm font-medium break-words">
                         {track.filename}
                       </CardTitle>
+                      <div className="text-xs text-muted-foreground mt-1 break-all">
+                        ID: {track.track_id}
+                      </div>
                       <div className="flex items-center gap-2 mt-1">
                         <Badge
                           className={`text-xs ${getTrackTypeColor(track.processing_type)} text-white`}
@@ -275,7 +280,9 @@ export default function TracksPanel({ refreshTrigger }: TracksPanelProps) {
             ))}
           </div>
         )}
-      </ScrollArea>
+          </div>
+        </ScrollArea>
+      </div>
     </div>
   );
 }

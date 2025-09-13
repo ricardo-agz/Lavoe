@@ -9,6 +9,10 @@ export interface BeatTimelineProps {
   tracks: Track[];
   selectedBlock: string | null;
   onBlockClick: (id: string) => void;
+  onTimelineClick?: (time: number, trackIndex: number) => void;
+  onTimeChange?: (time: number) => void;
+  onBlockMove?: (blockId: string, newTime: number, newTrackIndex: number) => void;
+  insertionPoint?: {time: number, trackIndex: number} | null;
   totalMeasures: number;
 }
 
@@ -23,7 +27,7 @@ function TimeMarkers({ totalMeasures }: { totalMeasures: number }) {
           style={{ left: `${(i / totalMeasures) * 100}%` }}
         >
           <span className="absolute -top-8 -left-3 text-sm text-white font-mono font-bold">
-            {i + 1}
+            {i}
           </span>
         </div>
       );
@@ -35,7 +39,7 @@ function TimeMarkers({ totalMeasures }: { totalMeasures: number }) {
           style={{ left: `${(i / totalMeasures) * 100}%` }}
         >
           <span className="absolute -top-7 -left-2 text-xs text-white/80 font-mono">
-            {i + 1}
+            {i}
           </span>
         </div>
       );
@@ -61,23 +65,101 @@ export default function BeatTimeline({
   tracks,
   selectedBlock,
   onBlockClick,
+  onTimelineClick,
+  onTimeChange,
+  onBlockMove,
+  insertionPoint,
   totalMeasures,
 }: BeatTimelineProps) {
+  const handleTimelineClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!onTimelineClick || !event.currentTarget) return;
+    
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    
+    // Calculate time position with snap to grid
+    const rawTimePosition = (x / rect.width) * totalMeasures;
+    const snappedTime = Math.round(rawTimePosition * 4) / 4; // Snap to quarter beats
+    
+    // Calculate track index
+    const trackHeight = rect.height / tracks.length;
+    const trackIndex = Math.floor(y / trackHeight);
+    
+    // Clamp track index to valid range
+    const clampedTrackIndex = Math.max(0, Math.min(trackIndex, tracks.length - 1));
+    
+    onTimelineClick(snappedTime, clampedTrackIndex);
+  };
+
+  const handleScrubberMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!event.currentTarget) return;
+      const rect = event.currentTarget.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const timePosition = Math.max(0, Math.min((x / rect.width) * totalMeasures, totalMeasures));
+      
+      if (onTimeChange) {
+        onTimeChange(timePosition);
+      }
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
   return (
     <div className="flex-1 p-6">
       <div className="relative mb-8">
         <div className="relative h-10 mb-4 border-b border-border/70">
           <TimeMarkers totalMeasures={totalMeasures} />
           <div
-            className="absolute top-0 h-full w-0.5 bg-blue-500 z-50"
+            className="absolute top-0 h-full w-0.5 bg-blue-500 z-50 cursor-pointer hover:w-1 transition-all"
             style={{ left: `${(currentTime / totalMeasures) * 100}%` }}
+            onMouseDown={handleScrubberMouseDown}
           >
             <div className="absolute -top-1 -left-2 w-0 h-0 border-l-2 border-r-2 border-b-4 border-l-transparent border-r-transparent border-b-blue-500"></div>
           </div>
         </div>
 
         <div className="mt-8 relative flex-1">
-          <div className="flex-1 min-h-[calc(100vh-280px)] bg-background border border-border rounded relative overflow-hidden">
+          <div 
+            className="flex-1 min-h-[calc(100vh-280px)] bg-background border border-border rounded relative overflow-hidden cursor-crosshair"
+            onClick={handleTimelineClick}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = 'move';
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              const blockId = e.dataTransfer.getData('text/plain');
+              const rect = e.currentTarget.getBoundingClientRect();
+              const x = e.clientX - rect.left;
+              const y = e.clientY - rect.top;
+              
+              // Calculate new position
+              const newTime = Math.max(0, (x / rect.width) * totalMeasures);
+              const trackHeight = rect.height / tracks.length;
+              const newTrackIndex = Math.floor(y / trackHeight);
+              
+              // Snap to grid
+              const snappedTime = Math.round(newTime * 4) / 4;
+              const clampedTrackIndex = Math.max(0, Math.min(newTrackIndex, tracks.length - 1));
+              
+              // Update block position
+              if (onBlockMove) {
+                onBlockMove(blockId, snappedTime, clampedTrackIndex);
+              }
+            }}
+          >
             {Array.from({ length: totalMeasures + 1 }, (_, i) => (
               <div
                 key={`grid-v-${i}`}
@@ -105,12 +187,46 @@ export default function BeatTimeline({
               style={{ left: `${(currentTime / totalMeasures) * 100}%` }}
             />
 
+            {/* Insertion Point Indicator */}
+            {insertionPoint && (
+              <>
+                {/* Vertical line across the entire timeline */}
+                <div
+                  className="absolute w-0.5 bg-green-500 z-40"
+                  style={{
+                    left: `${(insertionPoint.time / totalMeasures) * 100}%`,
+                    top: '0%',
+                    height: '100%',
+                  }}
+                />
+                {/* Highlighted track area */}
+                <div
+                  className="absolute bg-green-500/20 border border-green-500/50 z-30"
+                  style={{
+                    left: `${(insertionPoint.time / totalMeasures) * 100}%`,
+                    top: `${(insertionPoint.trackIndex / tracks.length) * 100}%`,
+                    height: `${100 / tracks.length}%`,
+                    width: '2%',
+                  }}
+                />
+                {/* Arrow indicator */}
+                <div
+                  className="absolute w-0 h-0 border-l-2 border-r-2 border-b-4 border-l-transparent border-r-transparent border-b-green-500 z-50"
+                  style={{
+                    left: `${(insertionPoint.time / totalMeasures) * 100}%`,
+                    top: `${(insertionPoint.trackIndex / tracks.length) * 100}%`,
+                    transform: 'translateX(-50%)',
+                  }}
+                />
+              </>
+            )}
+
             {blocks.map((block) => (
               <div
                 key={block.id}
                 className={`absolute ${
                   block.color
-                } rounded cursor-pointer border-2 transition-all ${
+                } rounded cursor-move border-2 transition-all ${
                   selectedBlock === block.id
                     ? "border-white"
                     : "border-transparent"
@@ -122,6 +238,14 @@ export default function BeatTimeline({
                   height: `${60 / tracks.length - 2}%`,
                 }}
                 onClick={() => onBlockClick(block.id)}
+                draggable={true}
+                onDragStart={(e) => {
+                  e.dataTransfer.setData('text/plain', block.id);
+                  e.dataTransfer.effectAllowed = 'move';
+                }}
+                onDragEnd={(e) => {
+                  e.preventDefault();
+                }}
               >
                 <div className="p-2 h-full flex items-center">
                   <span className="text-xs font-medium text-white truncate">
@@ -134,6 +258,12 @@ export default function BeatTimeline({
             <div className="absolute top-2 left-2 text-xs text-gray-500">
               Piano Roll / MIDI Editor
             </div>
+            
+            {insertionPoint && (
+              <div className="absolute top-2 right-2 text-xs text-green-500 bg-green-500/10 px-2 py-1 rounded">
+                Insertion point set - Record audio to place here
+              </div>
+            )}
           </div>
         </div>
       </div>

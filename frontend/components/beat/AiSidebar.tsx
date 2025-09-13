@@ -34,7 +34,7 @@ export default function AiSidebar({
   const placeholder =
     mode === "beat" ? "Describe a beat..." : "Ask the agent...";
   return (
-    <div className="w-80 bg-background border-l border-border flex flex-col h-full">
+    <div className="w-80 bg-background border-l border-border flex flex-col h-full overflow-scroll">
       <Tabs defaultValue="chat" className="flex-1 flex flex-col">
         <div className="border-b border-border">
           <TabsList className="grid w-full grid-cols-2 bg-background rounded-none h-12">
@@ -55,7 +55,7 @@ export default function AiSidebar({
           </TabsList>
         </div>
 
-        <TabsContent value="chat" className="flex-1 m-0 flex flex-col">
+        <TabsContent value="chat" className="flex-1 m-0 flex flex-col min-h-0">
           <div className="flex-1 p-4 space-y-4 overflow-y-auto">
             {generationStatus && (
               <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
@@ -140,7 +140,7 @@ export default function AiSidebar({
           </div>
         </TabsContent>
 
-        <TabsContent value="tracks" className="flex-1 m-0 flex flex-col">
+        <TabsContent value="tracks" className="flex-1 m-0 flex flex-col min-h-0">
           <TracksPanel refreshTrigger={tracksRefreshTrigger} />
         </TabsContent>
       </Tabs>
