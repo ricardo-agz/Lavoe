@@ -2,20 +2,16 @@
 
 import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { AudioUpload } from "./audio-upload"
+import { AudioPlayer } from "./audio-player"
+import { AiChat } from "./ai-chat"
+import { useAudioProcessing } from "@/hooks/use-audio-processing"
 import {
   Play,
   Pause,
   Square,
   RotateCcw,
   Plus,
-  ThumbsUp,
-  ThumbsDown,
-  Copy,
-  MoreHorizontal,
-  MessageSquare,
-  ArrowUp,
-  AtSign,
 } from "lucide-react"
 
 interface MusicBlock {
@@ -26,6 +22,7 @@ interface MusicBlock {
   startTime: number
   duration: number
   track: number
+  audioData?: string // Base64 audio data for the block
 }
 
 interface Track {
@@ -43,43 +40,24 @@ const initialTracks: Track[] = [
   { id: "track-4", name: "Percussion", color: "bg-pink-500", muted: false, volume: 75 },
 ]
 
-const initialBlocks: MusicBlock[] = [
-  { id: "block-1", name: "Piano Melody", type: "melody", color: "bg-blue-600", startTime: 8, duration: 24, track: 0 },
-  { id: "block-2", name: "Bass Line", type: "bass", color: "bg-cyan-500", startTime: 16, duration: 32, track: 1 },
-  { id: "block-3", name: "Kick", type: "drums", color: "bg-violet-600", startTime: 0, duration: 4, track: 2 },
-  { id: "block-4", name: "Kick", type: "drums", color: "bg-violet-600", startTime: 8, duration: 4, track: 2 },
-  { id: "block-5", name: "Kick", type: "drums", color: "bg-violet-600", startTime: 16, duration: 4, track: 2 },
-  { id: "block-6", name: "Kick", type: "drums", color: "bg-violet-600", startTime: 24, duration: 4, track: 2 },
-  { id: "block-7", name: "Kick", type: "drums", color: "bg-violet-600", startTime: 32, duration: 4, track: 2 },
-]
-
 const TIMELINE_WIDTH = 800
-const TIMELINE_MEASURES = 64 // measures instead of seconds
+const TIMELINE_MEASURES = 64
 const PIXELS_PER_MEASURE = TIMELINE_WIDTH / TIMELINE_MEASURES
 
 export default function BeatMaker() {
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [bpm, setBpm] = useState(160)
-  const [blocks, setBlocks] = useState<MusicBlock[]>(initialBlocks)
+  const [blocks, setBlocks] = useState<MusicBlock[]>([])
   const [tracks, setTracks] = useState<Track[]>(initialTracks)
   const [selectedBlock, setSelectedBlock] = useState<string | null>(null)
-  const [aiPrompt, setAiPrompt] = useState("")
+  const [uploadedAudio, setUploadedAudio] = useState<{
+    data: string
+    filename: string
+  } | null>(null)
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
-  const audioContextRef = useRef<AudioContext | null>(null)
-
-  // Initialize Web Audio API
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
-    }
-    return () => {
-      if (audioContextRef.current) {
-        audioContextRef.current.close()
-      }
-    }
-  }, [])
+  const { isProcessing, chopAudio } = useAudioProcessing()
 
   const startPlayback = () => {
     if (!isPlaying) {
@@ -87,12 +65,12 @@ export default function BeatMaker() {
       intervalRef.current = setInterval(
         () => {
           setCurrentTime((prev) => {
-            const newTime = prev + 0.25 // quarter beat increments
+            const newTime = prev + 0.25
             return newTime >= TIMELINE_MEASURES ? 0 : newTime
           })
         },
         (60 / bpm / 4) * 1000,
-      ) // quarter note timing based on BPM
+      )
     }
   }
 
@@ -109,12 +87,46 @@ export default function BeatMaker() {
     setCurrentTime(0)
   }
 
+  const handleAudioUploaded = (audioData: string, filename: string) => {
+    setUploadedAudio({ data: audioData, filename })
+  }
+
+  const handleAudioProcess = async (prompt: string) => {
+    if (!uploadedAudio) {
+      throw new Error('Please upload an audio file first')
+    }
+
+    const lowerPrompt = prompt.toLowerCase()
+
+    if (lowerPrompt.includes('chop') || lowerPrompt.includes('segment') || lowerPrompt.includes('beat')) {
+      // Chop audio and add to timeline
+      const result = await chopAudio(uploadedAudio.data, uploadedAudio.filename, {
+        default_length: lowerPrompt.includes('short') ? 1.0 : 1.8,
+        n_clusters: 6,
+      })
+
+      // Convert chops to music blocks
+      const newBlocks: MusicBlock[] = result.chops.map((chop, index) => ({
+        id: `chop-${chop.id}`,
+        name: `Chop ${index + 1}`,
+        type: "drums" as const,
+        color: `bg-emerald-${500 + (chop.cluster_label || 0) * 100}`,
+        startTime: index * 4, // Space them out every 4 measures
+        duration: Math.max(2, Math.min(8, chop.duration * 4)), // Convert to measures
+        track: chop.cluster_label || 0,
+        audioData: chop.audio_data,
+      }))
+
+      setBlocks(prev => [...prev, ...newBlocks])
+    } else {
+      throw new Error('Try asking me to "chop this into beats" or "segment this audio"')
+    }
+  }
+
   const generateTimeMarkers = () => {
     const markers = []
-    // Major markers every 4 measures
     for (let i = 0; i <= TIMELINE_MEASURES; i += 4) {
       if (i % 16 === 0) {
-        // Extra prominent markers every 16 measures
         markers.push(
           <div
             key={`major-${i}`}
@@ -137,7 +149,6 @@ export default function BeatMaker() {
       }
     }
 
-    // Beat markers (every measure)
     for (let i = 1; i < TIMELINE_MEASURES; i++) {
       if (i % 4 !== 0) {
         markers.push(
@@ -157,24 +168,6 @@ export default function BeatMaker() {
     setSelectedBlock(selectedBlock === blockId ? null : blockId)
   }
 
-  const generateAIComponent = () => {
-    if (!aiPrompt.trim()) return
-
-    // Simulate AI generation
-    const newBlock: MusicBlock = {
-      id: `ai-block-${Date.now()}`,
-      name: aiPrompt,
-      type: "melody",
-      color: "bg-emerald-500",
-      startTime: Math.floor(Math.random() * 48),
-      duration: 8 + Math.floor(Math.random() * 16),
-      track: Math.floor(Math.random() * tracks.length),
-    }
-
-    setBlocks((prev) => [...prev, newBlock])
-    setAiPrompt("")
-  }
-
   useEffect(() => {
     return () => {
       if (intervalRef.current) {
@@ -191,11 +184,10 @@ export default function BeatMaker() {
         <div className="p-6 border-b border-gray-700">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-4">
-              <h1 className="text-2xl font-bold">Gliding 808 Trap Starter</h1>
-              <span className="text-sm text-gray-400">♯ D Major • {bpm}</span>
+              <h1 className="text-2xl font-bold">Lavoe Beat Maker</h1>
+              <span className="text-sm text-gray-400">♯ D Major • {bpm} BPM</span>
             </div>
             <div className="flex items-center gap-4">
-              <span className="text-sm font-mono text-gray-400">02:25</span>
               <Button
                 onClick={isPlaying ? stopPlayback : startPlayback}
                 size="lg"
@@ -209,11 +201,25 @@ export default function BeatMaker() {
               <Button onClick={resetPlayback} variant="outline" size="lg">
                 <RotateCcw className="w-5 h-5" />
               </Button>
-              <Button variant="outline" size="lg">
-                Export
-              </Button>
             </div>
           </div>
+        </div>
+
+        {/* Audio Upload Section */}
+        <div className="p-6 border-b border-gray-700">
+          <h3 className="text-lg font-medium mb-4">Upload Audio to Chop</h3>
+          <AudioUpload 
+            onAudioUploaded={handleAudioUploaded}
+            disabled={isProcessing}
+            className="mb-4"
+          />
+          {uploadedAudio && (
+            <AudioPlayer
+              audioData={uploadedAudio.data}
+              filename={uploadedAudio.filename}
+              showDownload={false}
+            />
+          )}
         </div>
 
         {/* Timeline */}
@@ -232,8 +238,8 @@ export default function BeatMaker() {
             </div>
 
             <div className="mt-8 relative flex-1">
-              <div className="flex-1 min-h-[calc(100vh-280px)] bg-gray-900 border border-gray-600 rounded relative overflow-hidden">
-                {/* Vertical grid lines */}
+              <div className="flex-1 min-h-[400px] bg-gray-900 border border-gray-600 rounded relative overflow-hidden">
+                {/* Grid lines */}
                 {Array.from({ length: TIMELINE_MEASURES + 1 }, (_, i) => (
                   <div
                     key={`grid-v-${i}`}
@@ -248,21 +254,21 @@ export default function BeatMaker() {
                   />
                 ))}
 
-                {/* Horizontal grid lines */}
-                {Array.from({ length: 17 }, (_, i) => (
+                {Array.from({ length: 5 }, (_, i) => (
                   <div
                     key={`grid-h-${i}`}
                     className="absolute left-0 right-0 border-t border-gray-700/30"
-                    style={{ top: `${(i / 16) * 100}%` }}
+                    style={{ top: `${(i / 4) * 100}%` }}
                   />
                 ))}
 
-                {/* Playhead overlay for grid area */}
+                {/* Playhead overlay */}
                 <div
                   className="absolute top-0 bottom-0 w-0.5 bg-blue-500 z-50"
                   style={{ left: `${(currentTime / TIMELINE_MEASURES) * 100}%` }}
                 />
 
+                {/* Music blocks */}
                 {blocks.map((block) => (
                   <div
                     key={block.id}
@@ -272,8 +278,8 @@ export default function BeatMaker() {
                     style={{
                       left: `${(block.startTime / TIMELINE_MEASURES) * 100}%`,
                       width: `${(block.duration / TIMELINE_MEASURES) * 100}%`,
-                      top: `${(block.track / tracks.length) * 60 + 10}%`,
-                      height: `${60 / tracks.length - 2}%`,
+                      top: `${(block.track / tracks.length) * 80 + 10}%`,
+                      height: `${80 / tracks.length - 2}%`,
                     }}
                     onClick={() => handleBlockClick(block.id)}
                   >
@@ -283,8 +289,21 @@ export default function BeatMaker() {
                   </div>
                 ))}
 
-                {/* Grid content area label */}
-                <div className="absolute top-2 left-2 text-xs text-gray-500">Piano Roll / MIDI Editor</div>
+                {/* Track labels */}
+                <div className="absolute left-2 top-2 space-y-2">
+                  {tracks.map((track, index) => (
+                    <div
+                      key={track.id}
+                      className="text-xs text-gray-400"
+                      style={{ 
+                        marginTop: `${(index / tracks.length) * 80 + 5}%`,
+                        height: `${80 / tracks.length}%`
+                      }}
+                    >
+                      {track.name}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -293,121 +312,17 @@ export default function BeatMaker() {
 
       {/* AI Sidebar */}
       <div className="w-80 bg-gray-900 border-l border-gray-800 flex flex-col h-full">
-        {/* Chat Header */}
-        <div className="p-4 border-b border-gray-800 flex items-center justify-between">
-          <h2 className="text-lg font-medium text-white">Generate Music</h2>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-gray-400 hover:text-white">
-              <Plus className="w-4 h-4" />
-            </Button>
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-gray-400 hover:text-white">
-              <RotateCcw className="w-4 h-4" />
-            </Button>
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-gray-400 hover:text-white">
-              <MoreHorizontal className="w-4 h-4" />
-            </Button>
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-gray-400 hover:text-white">
-              ×
-            </Button>
-          </div>
+        <div className="p-4 border-b border-gray-800">
+          <h2 className="text-lg font-medium text-white">AI Beat Assistant</h2>
+          <p className="text-sm text-gray-400">Upload audio and ask me to chop it into beats</p>
         </div>
-
-        {/* Chat Messages Area */}
-        <div className="flex-1 p-4 space-y-4 overflow-y-auto">
-          {/* Example conversation */}
-          <div className="space-y-3">
-            <div className="bg-gray-800 rounded-lg p-3">
-              <input
-                type="text"
-                placeholder="create a trap beat with heavy 808s"
-                className="w-full bg-transparent text-white placeholder-gray-500 border-none outline-none"
-              />
-            </div>
-
-            <div className="text-xs text-gray-500 mb-2">Thought for 3s</div>
-
-            <div className="space-y-3">
-              <p className="text-white text-sm leading-relaxed">
-                I'll create a trap beat with heavy 808s and crisp hi-hats. This will include a punchy kick pattern and
-                atmospheric elements.
-              </p>
-
-              {/* Action buttons */}
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-gray-400 hover:text-white">
-                  <ThumbsUp className="w-4 h-4" />
-                </Button>
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-gray-400 hover:text-white">
-                  <ThumbsDown className="w-4 h-4" />
-                </Button>
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-gray-400 hover:text-white">
-                  <Copy className="w-4 h-4" />
-                </Button>
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-gray-400 hover:text-white">
-                  <MoreHorizontal className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Bottom Input Area */}
-        <div className="p-4 border-t border-gray-800">
-          <div className="bg-gray-800 rounded-lg p-3 space-y-3">
-            <div className="flex items-center gap-2 text-sm text-gray-400">
-              <span className="bg-gray-700 px-2 py-1 rounded flex items-center">
-                <AtSign className="w-3 h-3" />
-              </span>
-              <span className="bg-gray-700 px-2 py-1 rounded text-xs flex items-center gap-1">
-                <span className="w-2 h-2 bg-green-500 rounded-full"></span>1 Tab
-              </span>
-              <span className="ml-auto">6.8%</span>
-              <div className="w-4 h-4 border border-gray-600 rounded-full flex items-center justify-center">
-                <div className="w-2 h-2 bg-gray-600 rounded-full"></div>
-              </div>
-            </div>
-
-            <Input
-              value={aiPrompt}
-              onChange={(e) => setAiPrompt(e.target.value)}
-              placeholder="Plan, search, build anything"
-              className="bg-transparent border-none text-white placeholder-gray-500 p-0 focus-visible:ring-0"
-              onKeyPress={(e) => {
-                if (e.key === "Enter") {
-                  generateAIComponent()
-                }
-              }}
-            />
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-xs text-gray-400">
-                <span className="flex items-center gap-1">
-                  <span>∞</span>
-                  <span className="bg-gray-700 px-1 rounded">#1</span>
-                  <span>⌃</span>
-                </span>
-                <span className="flex items-center gap-1">
-                  <span>gpt-5</span>
-                  <span className="text-yellow-400">⚡</span>
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-gray-400 hover:text-white">
-                  <MessageSquare className="w-4 h-4" />
-                </Button>
-                <Button
-                  onClick={generateAIComponent}
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-8 p-0 text-gray-400 hover:text-white"
-                  disabled={!aiPrompt.trim()}
-                >
-                  <ArrowUp className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-          </div>
+        
+        <div className="flex-1">
+          <AiChat
+            onAudioProcess={handleAudioProcess}
+            isProcessing={isProcessing}
+            className="h-full"
+          />
         </div>
       </div>
     </div>
