@@ -7,13 +7,13 @@ from contextlib import asynccontextmanager
 
 import librosa
 import soundfile as sf
-from fastapi import FastAPI, File, HTTPException, UploadFile, Request
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field, validator
 from typing import Optional, List, Dict, Any
 
-from audio_processing import get_harmonic_components, add_reverb
+from audio_processing import get_harmonic_components, get_percussive_components, add_reverb, adjust_pitch
 import json
 import numpy as np
 from sklearn.cluster import KMeans
@@ -233,14 +233,159 @@ async def extract_harmonic(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"File processing error: {str(e)}") from e
 
+@app.post("/api/extract_percussive")
+async def extract_percussive(file: UploadFile = File(...)):
+    """
+    Extract percussive components from an uploaded audio file.
+    
+    Args:
+        file: The audio file to process
+        
+    Returns:
+        The processed audio file with only percussive components
+    """
+    # Validate file has an extension
+    if not file.filename or '.' not in file.filename:
+        raise HTTPException(status_code=400, detail="File must have a valid audio extension")
+    
+    try:
+        # Read the uploaded file
+        file_contents = await file.read()
+        
+        # Create temporary files for processing
+        file_ext = '.' + file.filename.split('.')[-1].lower()
+        with tempfile.NamedTemporaryFile(suffix=file_ext, delete=False) as temp_input:
+            temp_input.write(file_contents)
+            temp_input_path = temp_input.name
+        
+        try:
+            # Load audio file with librosa
+            y, sr = librosa.load(temp_input_path, sr=None)
+            
+            # Extract harmonic components
+            y_percussive = get_percussive_components(y)
+            
+            # Write processed audio to buffer as MP3
+            # Since soundfile doesn't support MP3 directly, we'll use WAV format
+            # and let the client handle conversion if needed, or we can use a different approach
+            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_output:
+                sf.write(temp_output.name, y_percussive, sr)
+                temp_output_path = temp_output.name
+            
+            # Read the processed file and convert back to bytes
+            with open(temp_output_path, 'rb') as f:
+                processed_audio = f.read()
+            
+            # Clean up temporary files
+            os.unlink(temp_input_path)
+            os.unlink(temp_output_path)
+            
+            # Return the processed audio file
+            # Generate output filename
+            base_name = '.'.join(file.filename.split('.')[:-1])
+            output_filename = f"percussive_{base_name}.wav"
+            
+            return Response(
+                content=processed_audio,
+                media_type="audio/wav",
+                headers={
+                    "Content-Disposition": f"attachment; filename={output_filename}"
+                }
+            )
+            
+        except Exception as e:
+            # Clean up on error
+            if os.path.exists(temp_input_path):
+                os.unlink(temp_input_path)
+            raise HTTPException(status_code=500, detail=f"Audio processing error: {str(e)}") from e
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"File processing error: {str(e)}") from e
+
+
+@app.post("/api/adjust_pitch")
+async def adjust_pitch_endpoint(
+    file: UploadFile = File(...),
+    semitones: float = Form(0.0)
+):
+    """
+    Adjust the pitch of an uploaded audio file by a specified number of semitones.
+    
+    Args:
+        file: The audio file to process
+        semitones: Number of semitones to shift (positive for higher pitch, negative for lower)
+        
+    Returns:
+        The processed audio file with adjusted pitch
+    """
+    # Validate file has an extension
+    if not file.filename or '.' not in file.filename:
+        raise HTTPException(status_code=400, detail="File must have a valid audio extension")
+    
+    # Validate semitones range (reasonable limits to prevent extreme processing)
+    if not -24.0 <= semitones <= 24.0:
+        raise HTTPException(status_code=400, detail="Semitones must be between -24.0 and 24.0")
+    
+    try:
+        # Read the uploaded file
+        file_contents = await file.read()
+        
+        # Create temporary files for processing
+        file_ext = '.' + file.filename.split('.')[-1].lower()
+        with tempfile.NamedTemporaryFile(suffix=file_ext, delete=False) as temp_input:
+            temp_input.write(file_contents)
+            temp_input_path = temp_input.name
+        
+        try:
+            # Load audio file with librosa
+            y, sr = librosa.load(temp_input_path, sr=None)
+            
+            # Adjust pitch
+            y_shifted = adjust_pitch(y, sr, semitones)
+            
+            # Write processed audio to temporary file
+            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_output:
+                sf.write(temp_output.name, y_shifted, sr)
+                temp_output_path = temp_output.name
+            
+            # Read the processed file
+            with open(temp_output_path, 'rb') as f:
+                processed_audio = f.read()
+            
+            # Clean up temporary files
+            os.unlink(temp_input_path)
+            os.unlink(temp_output_path)
+            
+            # Generate output filename
+            base_name = '.'.join(file.filename.split('.')[:-1])
+            semitone_str = f"{semitones:+.1f}st" if semitones != 0 else "0st"
+            output_filename = f"pitch_{semitone_str}_{base_name}.wav"
+            
+            return Response(
+                content=processed_audio,
+                media_type="audio/wav",
+                headers={
+                    "Content-Disposition": f"attachment; filename={output_filename}"
+                }
+            )
+            
+        except Exception as e:
+            # Clean up on error
+            if os.path.exists(temp_input_path):
+                os.unlink(temp_input_path)
+            raise HTTPException(status_code=500, detail=f"Audio processing error: {str(e)}") from e
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"File processing error: {str(e)}") from e
+
 
 @app.post("/api/add_reverb")
 async def add_reverb_endpoint(
     file: UploadFile = File(...),
-    room_size: float = 0.5,
-    damping: float = 0.5,
-    wet_level: float = 0.3,
-    dry_level: float = 0.7
+    room_size: float = Form(0.5),
+    damping: float = Form(0.5),
+    wet_level: float = Form(0.3),
+    dry_level: float = Form(0.7)
 ):
     """
     Add reverb effect to an uploaded audio file.
