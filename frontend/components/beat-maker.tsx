@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
+import { useChat } from "@ai-sdk/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -64,7 +65,35 @@ export default function BeatMaker() {
   const [blocks, setBlocks] = useState<MusicBlock[]>(initialBlocks)
   const [tracks, setTracks] = useState<Track[]>(initialTracks)
   const [selectedBlock, setSelectedBlock] = useState<string | null>(null)
-  const [aiPrompt, setAiPrompt] = useState("")
+  const [processedAudio, setProcessedAudio] = useState<any[]>([])
+
+  // Chat functionality
+  const [input, setInput] = useState('')
+  const { messages, sendMessage, status, error } = useChat({
+    onFinish: (message: any) => {
+      // Handle tool results when they come back
+      const toolCalls = message.toolInvocations || []
+      toolCalls.forEach((toolCall: any) => {
+        if (toolCall.result) {
+          handleAudioProcessed(toolCall.result)
+        }
+      })
+    }
+  })
+  
+  const isLoading = status === 'streaming' || status === 'submitted'
+  
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInput(e.target.value)
+  }
+  
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (input.trim()) {
+      sendMessage({ text: input })
+      setInput('')
+    }
+  }
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
@@ -157,22 +186,39 @@ export default function BeatMaker() {
     setSelectedBlock(selectedBlock === blockId ? null : blockId)
   }
 
-  const generateAIComponent = () => {
-    if (!aiPrompt.trim()) return
-
-    // Simulate AI generation
-    const newBlock: MusicBlock = {
-      id: `ai-block-${Date.now()}`,
-      name: aiPrompt,
-      type: "melody",
-      color: "bg-emerald-500",
-      startTime: Math.floor(Math.random() * 48),
-      duration: 8 + Math.floor(Math.random() * 16),
-      track: Math.floor(Math.random() * tracks.length),
+  const handleAudioProcessed = (result: any) => {
+    // Store processed audio results
+    setProcessedAudio(prev => [...prev, result])
+    
+    // If it's chops, create blocks for each chop
+    if (result.success && result.chops) {
+      const newBlocks: MusicBlock[] = result.chops.slice(0, 8).map((chop: any, index: number) => ({
+        id: `chop-${Date.now()}-${index}`,
+        name: chop.id,
+        type: "melody" as const,
+        color: "bg-emerald-500",
+        startTime: index * 8, // Space them out
+        duration: Math.max(2, Math.min(8, chop.duration * 4)), // Convert to measures
+        track: index % tracks.length,
+      }))
+      
+      setBlocks(prev => [...prev, ...newBlocks])
     }
-
-    setBlocks((prev) => [...prev, newBlock])
-    setAiPrompt("")
+    
+    // If it's a single processed audio file, create one block
+    else if (result.success && result.audioData) {
+      const newBlock: MusicBlock = {
+        id: `processed-${Date.now()}`,
+        name: result.filename || "Processed Audio",
+        type: "melody",
+        color: "bg-blue-500",
+        startTime: Math.floor(Math.random() * 32),
+        duration: 8,
+        track: 0,
+      }
+      
+      setBlocks(prev => [...prev, newBlock])
+    }
   }
 
   useEffect(() => {
@@ -314,41 +360,61 @@ export default function BeatMaker() {
 
         {/* Chat Messages Area */}
         <div className="flex-1 p-4 space-y-4 overflow-y-auto">
-          {/* Example conversation */}
-          <div className="space-y-3">
-            <div className="bg-gray-800 rounded-lg p-3">
-              <input
-                type="text"
-                placeholder="create a trap beat with heavy 808s"
-                className="w-full bg-transparent text-white placeholder-gray-500 border-none outline-none"
-              />
-            </div>
-
-            <div className="text-xs text-gray-500 mb-2">Thought for 3s</div>
-
-            <div className="space-y-3">
-              <p className="text-white text-sm leading-relaxed">
-                I'll create a trap beat with heavy 808s and crisp hi-hats. This will include a punchy kick pattern and
-                atmospheric elements.
-              </p>
-
-              {/* Action buttons */}
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-gray-400 hover:text-white">
-                  <ThumbsUp className="w-4 h-4" />
-                </Button>
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-gray-400 hover:text-white">
-                  <ThumbsDown className="w-4 h-4" />
-                </Button>
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-gray-400 hover:text-white">
-                  <Copy className="w-4 h-4" />
-                </Button>
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-gray-400 hover:text-white">
-                  <MoreHorizontal className="w-4 h-4" />
-                </Button>
+          {messages.length === 0 && (
+            <div className="text-center text-gray-400 space-y-2">
+              <p className="text-sm">Upload audio and describe what you'd like to do!</p>
+              <div className="text-xs space-y-1">
+                <p>• Extract harmonics from vocals</p>
+                <p>• Add reverb effects</p>
+                <p>• Chop audio into segments</p>
               </div>
             </div>
-          </div>
+          )}
+          
+          {messages.map((message: any) => {
+            const isUser = message.role === 'user'
+            const hasToolInvocations = message.toolInvocations && message.toolInvocations.length > 0
+
+            return (
+              <div key={message.id} className={`space-y-3 ${isUser ? 'ml-8' : 'mr-8'}`}>
+                <div className={`rounded-lg p-3 ${isUser ? 'bg-blue-600 ml-auto' : 'bg-gray-800'}`}>
+                  <p className="text-white text-sm leading-relaxed whitespace-pre-wrap">
+                    {message.content}
+                  </p>
+                </div>
+
+                {/* Render tool invocations */}
+                {hasToolInvocations && message.toolInvocations.map((toolCall: any, index: number) => (
+                  <div key={index} className="bg-gray-700 rounded-lg p-3 space-y-2">
+                    <div className="flex items-center gap-2 text-xs text-gray-400">
+                      <span>Processing: {toolCall.toolName}</span>
+                      {toolCall.state === 'call' && <span className="animate-pulse">...</span>}
+                    </div>
+                    
+                    {toolCall.result && (
+                      <div className="space-y-2">
+                        <p className="text-white text-sm">{toolCall.result.message}</p>
+                        
+                        {/* Show success/error status */}
+                        {!toolCall.result.success && toolCall.result.error && (
+                          <div className="bg-red-900/50 rounded p-2">
+                            <p className="text-red-300 text-xs">{toolCall.result.error}</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )
+          })}
+          
+          {isLoading && (
+            <div className="flex items-center gap-2 text-gray-400">
+              <span className="animate-pulse">●</span>
+              <span className="text-sm">Processing...</span>
+            </div>
+          )}
         </div>
 
         {/* Bottom Input Area */}
@@ -367,17 +433,15 @@ export default function BeatMaker() {
               </div>
             </div>
 
-            <Input
-              value={aiPrompt}
-              onChange={(e) => setAiPrompt(e.target.value)}
-              placeholder="Plan, search, build anything"
-              className="bg-transparent border-none text-white placeholder-gray-500 p-0 focus-visible:ring-0"
-              onKeyPress={(e) => {
-                if (e.key === "Enter") {
-                  generateAIComponent()
-                }
-              }}
-            />
+            <form id="chat-form" onSubmit={handleSubmit}>
+              <Input
+                value={input}
+                onChange={handleInputChange}
+                placeholder="Describe what you want to do with audio..."
+                className="bg-transparent border-none text-white placeholder-gray-500 p-0 focus-visible:ring-0"
+                disabled={isLoading}
+              />
+            </form>
 
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-xs text-gray-400">
@@ -397,11 +461,13 @@ export default function BeatMaker() {
                   <MessageSquare className="w-4 h-4" />
                 </Button>
                 <Button
-                  onClick={generateAIComponent}
+                  type="submit"
+                  form="chat-form"
                   variant="ghost"
                   size="sm"
                   className="h-8 w-8 p-0 text-gray-400 hover:text-white"
-                  disabled={!aiPrompt.trim()}
+                  disabled={isLoading || !input.trim()}
+                  onClick={handleSubmit}
                 >
                   <ArrowUp className="w-4 h-4" />
                 </Button>
