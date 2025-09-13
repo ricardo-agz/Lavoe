@@ -20,6 +20,13 @@ export function TracksSidebar({ tracks, onVolumeChange, onMuteToggle }: TracksSi
     <div className="h-full bg-black flex">
       {/* Left Navigation */}
       <div className="w-16 border-r border-gray-800 flex flex-col items-center py-4 gap-6">
+        <div className="mb-4">
+          <img 
+            src="/Lavoe.png"
+            alt="Lavoe"
+            className="h-5 w-auto"
+          />
+        </div>
         <Button
           variant="ghost"
           size="icon"
