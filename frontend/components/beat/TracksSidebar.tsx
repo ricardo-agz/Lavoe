@@ -70,7 +70,7 @@ export function TracksSidebar({ tracks, onVolumeChange, onMuteToggle }: TracksSi
 
         {/* Content Area */}
         {activeView === 'tracks' && (
-          <div className="flex-1 bg-black border-t border-gray-900">
+          <div className="w-[250px] bg-black border-t border-gray-900">
             <div className="h-14 flex items-center px-4">
               <span className="text-sm font-medium text-gray-200">Tracks</span>
               <Button 
@@ -129,7 +129,7 @@ export function TracksSidebar({ tracks, onVolumeChange, onMuteToggle }: TracksSi
         )}
 
         {activeView === 'record' && (
-          <div className="flex-1 bg-black border-t border-gray-900">
+          <div className="w-[250px] bg-black border-t border-gray-900">
             <div className="h-14 flex items-center px-4">
               <span className="text-sm font-medium text-gray-200">Record</span>
             </div>
