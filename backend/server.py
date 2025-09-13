@@ -1023,18 +1023,27 @@ async def start_track_generation(request: TrackGenerationRequest):
         ) from e
 
 
-@app.get("/get_generated_track")
+class BeatovenTrackResponse(BaseModel):
+    status: str
+    track_id: Optional[str] = None
+    stems: Optional[Dict[str, str]] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+@app.get("/get_generated_track", response_model=BeatovenTrackResponse)
 async def get_generated_track(task_id: str):
     """
-    Get the status and download URL for a generated track.
-    
+    Get the status for a generated track. If completed, downloads all tracks (main + stems)
+    and stores them in the storage system, returning track IDs for frontend access.
+
     Args:
         task_id: The task ID returned from start_track_generation
-        
+
     Returns:
-        The track status and metadata, or the audio file if completed
+        BeatovenTrackResponse with status and stored track references
     """
     try:
+        storage = get_audio_storage()
+
         # Send request to Beatoven AI to check task status
         async with httpx.AsyncClient() as client:
             response = await client.get(
@@ -1043,35 +1052,87 @@ async def get_generated_track(task_id: str):
                 timeout=30.0
             )
             response.raise_for_status()
-            
+
             task_data = response.json()
-            
+
             # If track is still being processed, return the status
             if task_data.get("status") in ["running", "composing"]:
-                return task_data
-            
-            # If track is composed, download and return the audio file
+                return BeatovenTrackResponse(status=task_data.get("status", "unknown"))
+
+            # If track is composed, download all tracks and store them
             if task_data.get("status") == "composed" and "meta" in task_data:
-                track_url = task_data["meta"].get("track_url")
+                meta = task_data["meta"]
+                track_url = meta.get("track_url")
+                stems_url = meta.get("stems_url", {})
+
                 if not track_url:
                     raise HTTPException(status_code=500, detail="Track URL not found in response")
-                
-                # Download the audio file
-                audio_response = await client.get(track_url, timeout=60.0)
-                audio_response.raise_for_status()
-                
-                # Return the audio file
-                return Response(
-                    content=audio_response.content,
-                    media_type="audio/mpeg",
-                    headers={
-                        "Content-Disposition": f"attachment; filename=generated_track_{task_id}.mp3"
-                    }
+
+                # Download and store the main track
+                logger.info(f"Downloading main track for task {task_id}")
+                main_response = await client.get(track_url, timeout=60.0)
+                main_response.raise_for_status()
+
+                main_track_metadata = {
+                    'processing_type': 'beatoven_main_track',
+                    'beatoven_task_id': task_id,
+                    'project_id': meta.get('project_id'),
+                    'track_id': meta.get('track_id'),
+                    'prompt': meta.get('prompt', {}),
+                    'version': meta.get('version')
+                }
+
+                main_track_id = storage.store_audio(
+                    main_response.content,
+                    f"beatoven_track_{task_id}.mp3",
+                    main_track_metadata
                 )
-            
+                logger.info(f"Stored main track as {main_track_id}")
+
+                # Download and store stems
+                stored_stems = {}
+                for stem_type, stem_url in stems_url.items():
+                    if stem_url:
+                        logger.info(f"Downloading {stem_type} stem for task {task_id}")
+                        stem_response = await client.get(stem_url, timeout=60.0)
+                        stem_response.raise_for_status()
+
+                        stem_metadata = {
+                            'processing_type': f'beatoven_stem_{stem_type}',
+                            'beatoven_task_id': task_id,
+                            'stem_type': stem_type,
+                            'project_id': meta.get('project_id'),
+                            'track_id': meta.get('track_id'),
+                            'main_track_id': main_track_id
+                        }
+
+                        stem_track_id = storage.store_audio(
+                            stem_response.content,
+                            f"beatoven_{stem_type}_{task_id}.mp3",
+                            stem_metadata
+                        )
+                        stored_stems[stem_type] = stem_track_id
+                        logger.info(f"Stored {stem_type} stem as {stem_track_id}")
+
+                response_metadata = {
+                    'project_id': meta.get('project_id'),
+                    'beatoven_track_id': meta.get('track_id'),
+                    'prompt': meta.get('prompt', {}),
+                    'version': meta.get('version'),
+                    'total_tracks_stored': 1 + len(stored_stems),
+                    'stems_available': list(stored_stems.keys())
+                }
+
+                return BeatovenTrackResponse(
+                    status="composed",
+                    track_id=main_track_id,
+                    stems=stored_stems,
+                    metadata=response_metadata
+                )
+
             # For any other status, return the raw response
-            return task_data
-            
+            return BeatovenTrackResponse(status=task_data.get("status", "unknown"))
+
     except httpx.HTTPStatusError as e:
         raise HTTPException(
             status_code=e.response.status_code,
@@ -1083,6 +1144,7 @@ async def get_generated_track(task_id: str):
             detail=f"Request to Beatoven AI failed: {str(e)}"
         ) from e
     except Exception as e:
+        logger.error(f"Error in get_generated_track: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Unexpected error: {str(e)}"
