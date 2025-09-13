@@ -3,6 +3,7 @@ import tempfile
 import base64
 import io
 import logging
+import asyncio
 from contextlib import asynccontextmanager
 
 import httpx
@@ -15,6 +16,7 @@ from pydantic import BaseModel, Field, validator
 from typing import Optional, List, Dict, Any
 
 from audio_processing import get_harmonic_components, get_percussive_components, add_reverb, adjust_pitch
+from audio_storage import get_audio_storage
 import json
 import numpy as np
 from sklearn.cluster import KMeans
@@ -56,7 +58,47 @@ class TrackGenerationResponse(BaseModel):
 class TrackStatusRequest(BaseModel):
     task_id: str
 
-app = FastAPI(title="Lavoe Audio Processing API", version="1.0.0")
+# Background task for cleanup
+cleanup_task = None
+
+async def periodic_cleanup():
+    """Background task to periodically clean up old audio files."""
+    while True:
+        try:
+            await asyncio.sleep(3600)  # Run every hour
+            storage = get_audio_storage()
+            deleted_count = storage.cleanup_old_tracks()
+            if deleted_count > 0:
+                logger.info(f"Background cleanup: removed {deleted_count} old tracks")
+        except Exception as e:
+            logger.error(f"Background cleanup error: {e}")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan - start/stop background tasks."""
+    global cleanup_task
+    
+    # Startup
+    logger.info("Starting Lavoe Audio Processing API")
+    cleanup_task = asyncio.create_task(periodic_cleanup())
+    logger.info("Background cleanup task started")
+    
+    yield
+    
+    # Shutdown
+    if cleanup_task:
+        cleanup_task.cancel()
+        try:
+            await cleanup_task
+        except asyncio.CancelledError:
+            pass
+    logger.info("Lavoe Audio Processing API shutdown complete")
+
+app = FastAPI(
+    title="Lavoe Audio Processing API", 
+    version="1.0.0",
+    lifespan=lifespan
+)
 
 # Pydantic models for Base64 audio processing
 class AudioInput(BaseModel):
@@ -116,6 +158,50 @@ class AudioOutput(BaseModel):
 class ChopOutput(BaseModel):
     chops: List[Dict[str, Any]]
     metadata: Dict[str, Any]
+
+# New models for ID-based audio system
+class TrackReference(BaseModel):
+    track_id: str = Field(..., description="Unique identifier for the audio track")
+    filename: Optional[str] = Field(None, description="Original filename")
+    file_size: Optional[int] = Field(None, description="File size in bytes")
+    duration_seconds: Optional[float] = Field(None, description="Duration in seconds")
+    sample_rate: Optional[int] = Field(None, description="Sample rate in Hz")
+    channels: Optional[int] = Field(None, description="Number of audio channels")
+    processing_type: Optional[str] = Field(None, description="Type of processing applied")
+    created_at: Optional[str] = Field(None, description="Creation timestamp")
+
+class TrackUploadResponse(BaseModel):
+    track_id: str = Field(..., description="Unique identifier for the stored track")
+    message: str = Field(..., description="Success message")
+    metadata: TrackReference = Field(..., description="Track metadata")
+
+class TrackProcessingRequest(BaseModel):
+    track_id: str = Field(..., description="ID of the track to process")
+
+class ReverbProcessingRequest(BaseModel):
+    track_id: str = Field(..., description="ID of the track to process")
+    room_size: float = Field(default=0.5, ge=0.0, le=1.0, description="Size of the reverb room (0.0 to 1.0)")
+    damping: float = Field(default=0.5, ge=0.0, le=1.0, description="High frequency damping (0.0 to 1.0)")
+    wet_level: float = Field(default=0.3, ge=0.0, le=1.0, description="Reverb effect level (0.0 to 1.0)")
+    dry_level: float = Field(default=0.7, ge=0.0, le=1.0, description="Original signal level (0.0 to 1.0)")
+
+class ChopProcessingRequest(BaseModel):
+    track_id: str = Field(..., description="ID of the track to process")
+    default_length: float = Field(default=1.8, ge=0.1, le=10.0, description="Default length for chops in seconds")
+    min_duration: float = Field(default=0.2, ge=0.05, le=2.0, description="Minimum duration for chops in seconds")
+    n_clusters: int = Field(default=6, ge=1, le=20, description="Number of clusters for grouping similar chops")
+
+class ChopOutputWithIds(BaseModel):
+    chop_track_ids: List[str] = Field(..., description="List of track IDs for the generated chops")
+    chop_summaries: List[TrackReference] = Field(..., description="Lightweight summaries of chop tracks")
+    metadata: Dict[str, Any] = Field(..., description="Processing metadata")
+
+class StorageStats(BaseModel):
+    total_tracks: int
+    total_size_bytes: int
+    total_size_mb: float
+    storage_dir: str
+    max_age_hours: int
 
 # Helper functions
 def decode_base64_audio(audio_data: str) -> bytes:
@@ -481,6 +567,411 @@ async def chop_audio_base64(input_data: ChopInput, request: Request):
             os.unlink(temp_file_path)
 
 
+# Agent-Friendly Processing Endpoints (using Track IDs)
+
+@app.post("/process/extract-harmonics", response_model=TrackUploadResponse)
+async def extract_harmonics_by_id(request: TrackProcessingRequest):
+    """
+    Extract harmonic components from a stored track using track ID.
+    Returns a new track ID for the processed audio - perfect for AI agents.
+    
+    Args:
+        request: TrackProcessingRequest with track_id
+        
+    Returns:
+        TrackUploadResponse with new track ID and metadata
+    """
+    try:
+        storage = get_audio_storage()
+        
+        # Get original audio
+        audio_bytes = storage.get_audio_bytes(request.track_id)
+        if audio_bytes is None:
+            raise HTTPException(status_code=404, detail=f"Track {request.track_id} not found")
+        
+        # Get original metadata
+        original_metadata = storage.get_track_metadata(request.track_id)
+        original_filename = original_metadata.get('filename', 'audio.wav') if original_metadata else 'audio.wav'
+        
+        # Process audio
+        temp_file_path = None
+        try:
+            # Create temporary file
+            file_ext = '.wav'
+            if original_filename and '.' in original_filename:
+                file_ext = '.' + original_filename.split('.')[-1].lower()
+            
+            with tempfile.NamedTemporaryFile(suffix=file_ext, delete=False) as temp_file:
+                temp_file.write(audio_bytes)
+                temp_file_path = temp_file.name
+            
+            # Load with librosa
+            y, sr = librosa.load(temp_file_path, sr=None)
+            
+            # Extract harmonic components
+            y_harmonic = get_harmonic_components(y)
+            
+            if len(y_harmonic) == 0:
+                raise ValueError("Harmonic extraction resulted in empty audio")
+            
+            # Save processed audio to bytes
+            processed_bytes = None
+            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as processed_file:
+                sf.write(processed_file.name, y_harmonic, sr)
+                processed_temp_path = processed_file.name
+            
+            with open(processed_temp_path, 'rb') as f:
+                processed_bytes = f.read()
+            
+            if os.path.exists(processed_temp_path):
+                os.unlink(processed_temp_path)
+            
+            # Create metadata for processed audio
+            processed_metadata = {
+                'duration_seconds': float(len(y_harmonic) / sr),
+                'sample_rate': int(sr),
+                'channels': 1 if len(y_harmonic.shape) == 1 else y_harmonic.shape[0],
+                'processing_type': 'harmonic_extraction',
+                'source_track_id': request.track_id,
+                'original_duration': float(len(y) / sr)
+            }
+            
+            # Generate new filename
+            base_name = original_filename.split('.')[0] if original_filename else "audio"
+            new_filename = f"harmonic_{base_name}.wav"
+            
+            # Store processed audio
+            new_track_id = storage.store_audio(processed_bytes, new_filename, processed_metadata)
+            
+            # Get summary for response
+            track_summary = storage.get_track_summary(new_track_id)
+            
+            logger.info(f"Successfully processed harmonic extraction: {request.track_id} -> {new_track_id}")
+            
+            return TrackUploadResponse(
+                track_id=new_track_id,
+                message=f"Harmonic extraction completed. New track: {new_track_id}",
+                metadata=TrackReference(**track_summary)
+            )
+            
+        finally:
+            if temp_file_path and os.path.exists(temp_file_path):
+                os.unlink(temp_file_path)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Harmonic extraction error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Harmonic extraction error: {str(e)}")
+
+
+@app.post("/process/reverb", response_model=TrackUploadResponse)
+async def process_reverb_by_id(request: ReverbProcessingRequest):
+    """
+    Apply reverb effect to a stored track using track ID.
+    Returns a new track ID for the processed audio - perfect for AI agents.
+    
+    Args:
+        request: ReverbProcessingRequest with track_id and reverb parameters
+        
+    Returns:
+        TrackUploadResponse with new track ID and metadata
+    """
+    try:
+        storage = get_audio_storage()
+        
+        # Get original audio
+        audio_bytes = storage.get_audio_bytes(request.track_id)
+        if audio_bytes is None:
+            raise HTTPException(status_code=404, detail=f"Track {request.track_id} not found")
+        
+        # Get original metadata
+        original_metadata = storage.get_track_metadata(request.track_id)
+        original_filename = original_metadata.get('filename', 'audio.wav') if original_metadata else 'audio.wav'
+        
+        # Process audio
+        temp_file_path = None
+        try:
+            # Create temporary file
+            file_ext = '.wav'
+            if original_filename and '.' in original_filename:
+                file_ext = '.' + original_filename.split('.')[-1].lower()
+            
+            with tempfile.NamedTemporaryFile(suffix=file_ext, delete=False) as temp_file:
+                temp_file.write(audio_bytes)
+                temp_file_path = temp_file.name
+            
+            # Load with librosa
+            y, sr = librosa.load(temp_file_path, sr=None)
+            
+            # Apply reverb effect
+            y_reverb = add_reverb(
+                y, 
+                sample_rate=sr, 
+                room_size=request.room_size,
+                damping=request.damping, 
+                wet_level=request.wet_level, 
+                dry_level=request.dry_level
+            )
+            
+            if len(y_reverb) == 0:
+                raise ValueError("Reverb processing resulted in empty audio")
+            
+            # Save processed audio to bytes
+            processed_bytes = None
+            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as processed_file:
+                sf.write(processed_file.name, y_reverb, sr)
+                processed_temp_path = processed_file.name
+            
+            with open(processed_temp_path, 'rb') as f:
+                processed_bytes = f.read()
+            
+            if os.path.exists(processed_temp_path):
+                os.unlink(processed_temp_path)
+            
+            # Create metadata for processed audio
+            processed_metadata = {
+                'duration_seconds': float(len(y_reverb) / sr),
+                'sample_rate': int(sr),
+                'channels': 1 if len(y_reverb.shape) == 1 else y_reverb.shape[0],
+                'processing_type': 'reverb',
+                'source_track_id': request.track_id,
+                'original_duration': float(len(y) / sr),
+                'reverb_settings': {
+                    'room_size': request.room_size,
+                    'damping': request.damping,
+                    'wet_level': request.wet_level,
+                    'dry_level': request.dry_level
+                }
+            }
+            
+            # Generate new filename
+            base_name = original_filename.split('.')[0] if original_filename else "audio"
+            new_filename = f"reverb_{base_name}.wav"
+            
+            # Store processed audio
+            new_track_id = storage.store_audio(processed_bytes, new_filename, processed_metadata)
+            
+            # Get summary for response
+            track_summary = storage.get_track_summary(new_track_id)
+            
+            logger.info(f"Successfully processed reverb: {request.track_id} -> {new_track_id}")
+            
+            return TrackUploadResponse(
+                track_id=new_track_id,
+                message=f"Reverb processing completed. New track: {new_track_id}",
+                metadata=TrackReference(**track_summary)
+            )
+            
+        finally:
+            if temp_file_path and os.path.exists(temp_file_path):
+                os.unlink(temp_file_path)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Reverb processing error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Reverb processing error: {str(e)}")
+
+
+@app.post("/process/chop-audio", response_model=ChopOutputWithIds)
+async def chop_audio_by_id(request: ChopProcessingRequest):
+    """
+    Chop audio into segments using harmonic component analysis from a stored track.
+    Returns track IDs for each chop - perfect for AI agents to minimize context usage.
+    
+    Args:
+        request: ChopProcessingRequest with track_id and chopping parameters
+        
+    Returns:
+        ChopOutputWithIds with track IDs for each chop and lightweight summaries
+    """
+    try:
+        storage = get_audio_storage()
+        
+        # Get original audio
+        audio_bytes = storage.get_audio_bytes(request.track_id)
+        if audio_bytes is None:
+            raise HTTPException(status_code=404, detail=f"Track {request.track_id} not found")
+        
+        # Get original metadata
+        original_metadata = storage.get_track_metadata(request.track_id)
+        original_filename = original_metadata.get('filename', 'audio.wav') if original_metadata else 'audio.wav'
+        
+        # Process audio
+        temp_file_path = None
+        try:
+            # Create temporary file
+            file_ext = '.wav'
+            if original_filename and '.' in original_filename:
+                file_ext = '.' + original_filename.split('.')[-1].lower()
+            
+            with tempfile.NamedTemporaryFile(suffix=file_ext, delete=False) as temp_file:
+                temp_file.write(audio_bytes)
+                temp_file_path = temp_file.name
+            
+            # Load with librosa
+            y, sr = librosa.load(temp_file_path, sr=None)
+            
+            # Apply HPSS to get harmonic component
+            y_harmonic, _ = librosa.effects.hpss(y)
+            
+            # Detect onsets on harmonic component
+            onset_kwargs = dict(backtrack=True, pre_max=7, post_max=7, pre_avg=7, post_avg=7, delta=0.25, wait=0)
+            oenv = librosa.onset.onset_strength(y=y_harmonic, sr=sr, hop_length=512)
+            onset_frames = librosa.onset.onset_detect(onset_envelope=oenv, sr=sr, hop_length=512, **onset_kwargs)
+            onset_times = librosa.frames_to_time(onset_frames, sr=sr, hop_length=512)
+            
+            # Create chops from onsets
+            chops_sec = []
+            n = len(onset_times)
+            for i, t in enumerate(onset_times):
+                start = float(t)
+                if i < n - 1:
+                    end = float(onset_times[i + 1])
+                    if end - start < request.min_duration:
+                        end = start + request.default_length
+                else:
+                    end = start + request.default_length
+                if end <= start:
+                    end = start + request.min_duration
+                chops_sec.append((start, end))
+            
+            if len(chops_sec) == 0:
+                chops_sec = [(0.0, len(y_harmonic) / sr)]
+            
+            # Extract features and create chop data
+            chop_track_ids = []
+            chop_summaries = []
+            feature_matrix = []
+            
+            for i, (start, end) in enumerate(chops_sec):
+                duration = end - start
+                
+                # Extract audio slice
+                start_sample = int(round(start * sr))
+                end_sample = int(round(end * sr))
+                y_slice = y_harmonic[start_sample:end_sample]
+                
+                # Extract features
+                if y_slice.size == 0:
+                    features = {
+                        'rms': 0.0, 'centroid': 0.0, 'zcr': 0.0,
+                        'chroma_mean': [0.0] * 12, 'mfcc_mean': [0.0] * 13,
+                        'dominant_pc': None, 'dominant_note': None
+                    }
+                else:
+                    features = {}
+                    features['rms'] = float(np.mean(librosa.feature.rms(y=y_slice)[0]))
+                    features['centroid'] = float(np.mean(librosa.feature.spectral_centroid(y=y_slice, sr=sr)[0]))
+                    features['zcr'] = float(np.mean(librosa.feature.zero_crossing_rate(y_slice)[0]))
+                    
+                    chroma = librosa.feature.chroma_stft(y=y_slice, sr=sr)
+                    features['chroma_mean'] = [float(x) for x in np.mean(chroma, axis=1)]
+                    dom = int(np.argmax(features['chroma_mean'])) if np.array(features['chroma_mean']).size > 0 else None
+                    features['dominant_pc'] = dom
+                    features['dominant_note'] = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'][dom] if dom is not None else None
+                    
+                    mfcc = librosa.feature.mfcc(y=y_slice, sr=sr, n_mfcc=13)
+                    features['mfcc_mean'] = [float(x) for x in np.mean(mfcc, axis=1)]
+                
+                # Save chop to bytes
+                chop_bytes = None
+                with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as chop_file:
+                    sf.write(chop_file.name, y_slice, sr)
+                    chop_temp_path = chop_file.name
+                
+                with open(chop_temp_path, 'rb') as f:
+                    chop_bytes = f.read()
+                
+                if os.path.exists(chop_temp_path):
+                    os.unlink(chop_temp_path)
+                
+                # Create metadata for chop
+                chop_metadata = {
+                    'duration_seconds': float(duration),
+                    'sample_rate': int(sr),
+                    'channels': 1 if len(y_slice.shape) == 1 else y_slice.shape[0],
+                    'processing_type': 'harmonic_chop',
+                    'source_track_id': request.track_id,
+                    'chop_index': i,
+                    'start_time': float(start),
+                    'end_time': float(end),
+                    'features': features
+                }
+                
+                # Generate chop filename
+                base_name = original_filename.split('.')[0] if original_filename else "audio"
+                chop_filename = f"chop_{i:03d}_{base_name}.wav"
+                
+                # Store chop
+                chop_track_id = storage.store_audio(chop_bytes, chop_filename, chop_metadata)
+                chop_track_ids.append(chop_track_id)
+                
+                # Get summary for response
+                chop_summary = storage.get_track_summary(chop_track_id)
+                chop_summaries.append(TrackReference(**chop_summary))
+                
+                # Create feature vector for clustering
+                feature_vec = [features['rms'], features['centroid'], features['zcr']] + features['mfcc_mean'][:4]
+                feature_matrix.append(feature_vec)
+            
+            # Perform clustering if possible
+            cluster_labels = []
+            if len(feature_matrix) > 0:
+                X = np.array(feature_matrix)
+                try:
+                    k = min(request.n_clusters, X.shape[0])
+                    if k > 1:
+                        scaler = StandardScaler()
+                        X_scaled = scaler.fit_transform(X)
+                        kmeans = KMeans(n_clusters=k, random_state=0, n_init=10).fit(X_scaled)
+                        cluster_labels = kmeans.labels_.tolist()
+                    else:
+                        cluster_labels = [0] * len(chop_track_ids)
+                        
+                except Exception as e:
+                    logger.warning(f"Clustering failed: {str(e)}")
+                    cluster_labels = [0] * len(chop_track_ids)
+            
+            # Create metadata
+            metadata = {
+                "source_track_id": request.track_id,
+                "original_filename": original_filename,
+                "processing_type": "audio_chopping",
+                "sample_rate": int(sr),
+                "total_chops": len(chop_track_ids),
+                "chopping_params": {
+                    "default_length": request.default_length,
+                    "min_duration": request.min_duration,
+                    "n_clusters": request.n_clusters
+                },
+                "onset_detection": {
+                    "onsets_detected": len(onset_times),
+                    "onset_times": [float(t) for t in onset_times]
+                },
+                "cluster_labels": cluster_labels
+            }
+            
+            logger.info(f"Successfully processed audio chopping: {request.track_id} -> {len(chop_track_ids)} chops")
+            
+            return ChopOutputWithIds(
+                chop_track_ids=chop_track_ids,
+                chop_summaries=chop_summaries,
+                metadata=metadata
+            )
+            
+        finally:
+            if temp_file_path and os.path.exists(temp_file_path):
+                os.unlink(temp_file_path)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Audio chopping error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Audio chopping error: {str(e)}")
+
+
 @app.post("/start_track_generation")
 async def start_track_generation(request: TrackGenerationRequest):
     """
@@ -596,6 +1087,243 @@ async def get_generated_track(task_id: str):
             status_code=500,
             detail=f"Unexpected error: {str(e)}"
         ) from e
+
+# Audio Storage and Management Endpoints
+
+@app.post("/upload-audio", response_model=TrackUploadResponse)
+async def upload_audio(file: UploadFile = File(...), request: Request = None):
+    """
+    Upload and store an audio file, returning a track ID for future reference.
+    This endpoint is designed to minimize context usage for AI agents.
+    
+    Args:
+        file: Audio file to upload
+        
+    Returns:
+        TrackUploadResponse with track ID and metadata
+    """
+    try:
+        logger.info(f"Processing audio upload: {file.filename}")
+        
+        # Validate file type
+        if file.content_type and not file.content_type.startswith('audio/'):
+            raise HTTPException(status_code=400, detail=f"Invalid content type: {file.content_type}")
+        
+        # Read file content
+        audio_bytes = await file.read()
+        
+        if len(audio_bytes) == 0:
+            raise HTTPException(status_code=400, detail="Empty audio file")
+        
+        # File size validation (100MB max)
+        if len(audio_bytes) > 100 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="File too large (max 100MB)")
+        
+        # Get audio storage instance
+        storage = get_audio_storage()
+        
+        # Try to extract basic metadata without full processing
+        audio_metadata = {'processing_type': 'original_upload'}
+        
+        # Only extract metadata if it's a reasonable file size
+        if len(audio_bytes) < 50 * 1024 * 1024:  # Less than 50MB
+            temp_file_path = None
+            try:
+                file_ext = '.wav'
+                if file.filename and '.' in file.filename:
+                    file_ext = '.' + file.filename.split('.')[-1].lower()
+                
+                with tempfile.NamedTemporaryFile(suffix=file_ext, delete=False) as temp_file:
+                    temp_file.write(audio_bytes)
+                    temp_file_path = temp_file.name
+                
+                # Load with librosa to get metadata
+                y, sr = librosa.load(temp_file_path, sr=None)
+                
+                audio_metadata.update({
+                    'duration_seconds': float(len(y) / sr),
+                    'sample_rate': int(sr),
+                    'channels': 1 if len(y.shape) == 1 else y.shape[0]
+                })
+                
+            except Exception as e:
+                logger.warning(f"Could not extract audio metadata: {e}")
+            finally:
+                if temp_file_path and os.path.exists(temp_file_path):
+                    os.unlink(temp_file_path)
+        
+        # Store audio
+        track_id = storage.store_audio(audio_bytes, file.filename, audio_metadata)
+        
+        # Get track summary for response
+        track_summary = storage.get_track_summary(track_id)
+        
+        logger.info(f"Successfully uploaded audio as track {track_id}")
+        
+        return TrackUploadResponse(
+            track_id=track_id,
+            message=f"Audio uploaded successfully as track {track_id}",
+            metadata=TrackReference(**track_summary)
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Audio upload error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Audio upload error: {str(e)}")
+
+
+@app.get("/tracks", response_model=List[TrackReference])
+async def list_tracks(limit: int = 100):
+    """
+    List all stored audio tracks with lightweight metadata.
+    Perfect for AI agents to see available tracks without heavy context.
+    
+    Args:
+        limit: Maximum number of tracks to return (default 100)
+        
+    Returns:
+        List of track references with metadata
+    """
+    try:
+        storage = get_audio_storage()
+        summaries = storage.list_tracks(limit=limit)
+        
+        return [TrackReference(**summary) for summary in summaries]
+        
+    except Exception as e:
+        logger.error(f"Error listing tracks: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error listing tracks: {str(e)}")
+
+
+@app.get("/tracks/{track_id}", response_model=TrackReference)
+async def get_track_info(track_id: str):
+    """
+    Get metadata for a specific track.
+    
+    Args:
+        track_id: Unique track identifier
+        
+    Returns:
+        Track metadata
+    """
+    try:
+        storage = get_audio_storage()
+        summary = storage.get_track_summary(track_id)
+        
+        if summary is None:
+            raise HTTPException(status_code=404, detail=f"Track {track_id} not found")
+        
+        return TrackReference(**summary)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting track info: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error getting track info: {str(e)}")
+
+
+@app.get("/tracks/{track_id}/download")
+async def download_track(track_id: str):
+    """
+    Download the actual audio file for a track.
+    
+    Args:
+        track_id: Unique track identifier
+        
+    Returns:
+        Audio file as response
+    """
+    try:
+        storage = get_audio_storage()
+        audio_bytes = storage.get_audio_bytes(track_id)
+        
+        if audio_bytes is None:
+            raise HTTPException(status_code=404, detail=f"Track {track_id} not found")
+        
+        # Get metadata for filename
+        metadata = storage.get_track_metadata(track_id)
+        filename = metadata.get('filename', f'track_{track_id}.wav') if metadata else f'track_{track_id}.wav'
+        
+        return Response(
+            content=audio_bytes,
+            media_type="audio/wav",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}"
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error downloading track: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error downloading track: {str(e)}")
+
+
+@app.delete("/tracks/{track_id}")
+async def delete_track(track_id: str):
+    """
+    Delete a stored track.
+    
+    Args:
+        track_id: Unique track identifier
+        
+    Returns:
+        Success message
+    """
+    try:
+        storage = get_audio_storage()
+        success = storage.delete_track(track_id)
+        
+        if not success:
+            raise HTTPException(status_code=404, detail=f"Track {track_id} not found")
+        
+        return {"message": f"Track {track_id} deleted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting track: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error deleting track: {str(e)}")
+
+
+@app.get("/storage/stats", response_model=StorageStats)
+async def get_storage_stats():
+    """
+    Get storage system statistics.
+    
+    Returns:
+        Storage statistics
+    """
+    try:
+        storage = get_audio_storage()
+        stats = storage.get_storage_stats()
+        
+        return StorageStats(**stats)
+        
+    except Exception as e:
+        logger.error(f"Error getting storage stats: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error getting storage stats: {str(e)}")
+
+
+@app.post("/storage/cleanup")
+async def cleanup_old_tracks():
+    """
+    Clean up old tracks based on max age configuration.
+    
+    Returns:
+        Number of tracks cleaned up
+    """
+    try:
+        storage = get_audio_storage()
+        deleted_count = storage.cleanup_old_tracks()
+        
+        return {"message": f"Cleaned up {deleted_count} old tracks"}
+        
+    except Exception as e:
+        logger.error(f"Error during cleanup: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error during cleanup: {str(e)}")
+
 
 @app.get("/health")
 async def health_check():
