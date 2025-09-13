@@ -121,7 +121,7 @@ export default function BeatMaker() {
             className="absolute top-0 h-6 w-0.5 bg-white"
             style={{ left: `${(i / TIMELINE_MEASURES) * 100}%` }}
           >
-            <span className="absolute -top-8 -left-3 text-sm text-white font-mono font-bold">{i + 1}</span>
+            <span className="absolute -top-8 -left-3 text-sm text-white font-mono font-bold">{i}</span>
           </div>,
         )
       } else {
@@ -131,7 +131,7 @@ export default function BeatMaker() {
             className="absolute top-0 h-4 w-0.5 bg-white/60"
             style={{ left: `${(i / TIMELINE_MEASURES) * 100}%` }}
           >
-            <span className="absolute -top-7 -left-2 text-xs text-white/80 font-mono">{i + 1}</span>
+            <span className="absolute -top-7 -left-2 text-xs text-white/80 font-mono">{i}</span>
           </div>,
         )
       }
