@@ -10,6 +10,13 @@ def get_harmonic_components(y):
 
     return y_harmonic
 
+def get_percussive_components(y):
+    """Get the percussive components of a given audio data."""
+
+    _, y_percussive = librosa.effects.hpss(y)
+
+    return y_percussive
+
 
 def add_reverb(y, sample_rate=44100, room_size=0.5, damping=0.5, wet_level=0.3, dry_level=0.7):
     """

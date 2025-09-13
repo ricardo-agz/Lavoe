@@ -7,7 +7,7 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
-from audio_processing import get_harmonic_components, add_reverb
+from audio_processing import get_harmonic_components, get_percussive_components, add_reverb
 
 app = FastAPI(title="Lavoe Audio Processing API", version="1.0.0")
 
@@ -72,6 +72,75 @@ async def extract_harmonic(file: UploadFile = File(...)):
             # Generate output filename
             base_name = '.'.join(file.filename.split('.')[:-1])
             output_filename = f"harmonic_{base_name}.wav"
+            
+            return Response(
+                content=processed_audio,
+                media_type="audio/wav",
+                headers={
+                    "Content-Disposition": f"attachment; filename={output_filename}"
+                }
+            )
+            
+        except Exception as e:
+            # Clean up on error
+            if os.path.exists(temp_input_path):
+                os.unlink(temp_input_path)
+            raise HTTPException(status_code=500, detail=f"Audio processing error: {str(e)}") from e
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"File processing error: {str(e)}") from e
+
+@app.post("/api/extract_percussive")
+async def extract_percussive(file: UploadFile = File(...)):
+    """
+    Extract percussive components from an uploaded audio file.
+    
+    Args:
+        file: The audio file to process
+        
+    Returns:
+        The processed audio file with only percussive components
+    """
+    # Validate file has an extension
+    if not file.filename or '.' not in file.filename:
+        raise HTTPException(status_code=400, detail="File must have a valid audio extension")
+    
+    try:
+        # Read the uploaded file
+        file_contents = await file.read()
+        
+        # Create temporary files for processing
+        file_ext = '.' + file.filename.split('.')[-1].lower()
+        with tempfile.NamedTemporaryFile(suffix=file_ext, delete=False) as temp_input:
+            temp_input.write(file_contents)
+            temp_input_path = temp_input.name
+        
+        try:
+            # Load audio file with librosa
+            y, sr = librosa.load(temp_input_path, sr=None)
+            
+            # Extract harmonic components
+            y_percussive = get_percussive_components(y)
+            
+            # Write processed audio to buffer as MP3
+            # Since soundfile doesn't support MP3 directly, we'll use WAV format
+            # and let the client handle conversion if needed, or we can use a different approach
+            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_output:
+                sf.write(temp_output.name, y_percussive, sr)
+                temp_output_path = temp_output.name
+            
+            # Read the processed file and convert back to bytes
+            with open(temp_output_path, 'rb') as f:
+                processed_audio = f.read()
+            
+            # Clean up temporary files
+            os.unlink(temp_input_path)
+            os.unlink(temp_output_path)
+            
+            # Return the processed audio file
+            # Generate output filename
+            base_name = '.'.join(file.filename.split('.')[:-1])
+            output_filename = f"percussive_{base_name}.wav"
             
             return Response(
                 content=processed_audio,
