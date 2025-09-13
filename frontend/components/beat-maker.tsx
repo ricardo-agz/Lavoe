@@ -210,13 +210,10 @@ export default function BeatMaker() {
       <div className="flex-1 flex flex-col">
         {/* Header */}
         <div className="p-6 border-b border-gray-700">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-center mb-4">
             <div className="flex items-center gap-4">
-              <h1 className="text-2xl font-bold">Gliding 808 Trap Starter</h1>
-              <span className="text-sm text-gray-400">♯ D Major • {bpm}</span>
             </div>
             <div className="flex items-center gap-4">
-              <span className="text-sm font-mono text-gray-400">02:25</span>
               <Button
                 onClick={isPlaying ? stopPlayback : startPlayback}
                 size="lg"
