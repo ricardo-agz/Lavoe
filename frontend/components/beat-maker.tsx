@@ -116,6 +116,9 @@ export default function BeatMaker() {
   const [tracks, setTracks] = useState<Track[]>(initialTracks);
   const [selectedBlock, setSelectedBlock] = useState<string | null>(null);
   const [aiPrompt, setAiPrompt] = useState("");
+  const [tracksRefreshTrigger, setTracksRefreshTrigger] = useState(0);
+  const [isGeneratingTrack, setIsGeneratingTrack] = useState(false);
+  const [generationStatus, setGenerationStatus] = useState<string>("");
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -162,22 +165,136 @@ export default function BeatMaker() {
     setSelectedBlock(selectedBlock === blockId ? null : blockId);
   };
 
-  const generateAIComponent = () => {
+  const generateAIComponent = async (mode: "beat" | "agent" = "beat") => {
     if (!aiPrompt.trim()) return;
 
-    // Simulate AI generation
-    const newBlock: MusicBlock = {
-      id: `ai-block-${Date.now()}`,
-      name: aiPrompt,
-      type: "melody",
-      color: "bg-emerald-500",
-      startTime: Math.floor(Math.random() * 48),
-      duration: 8 + Math.floor(Math.random() * 16),
-      track: Math.floor(Math.random() * tracks.length),
+    if (mode === "beat") {
+      // Handle Beatmaker mode - generate actual tracks
+      await generateBeatovenTrack(aiPrompt);
+    } else {
+      // Handle Agent mode - simulate AI generation (existing behavior)
+      const newBlock: MusicBlock = {
+        id: `ai-block-${Date.now()}`,
+        name: aiPrompt,
+        type: "melody",
+        color: "bg-emerald-500",
+        startTime: Math.floor(Math.random() * 48),
+        duration: 8 + Math.floor(Math.random() * 16),
+        track: Math.floor(Math.random() * tracks.length),
+      };
+
+      setBlocks((prev) => [...prev, newBlock]);
+      setAiPrompt("");
+    }
+  };
+
+  const generateBeatovenTrack = async (prompt: string) => {
+    try {
+      setIsGeneratingTrack(true);
+      setGenerationStatus("Starting track generation...");
+
+      // Start track generation
+      const response = await fetch("http://localhost:8000/start_track_generation", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt: { text: prompt },
+          format: "mp3",
+          looping: false,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to start track generation");
+      }
+
+      const result = await response.json();
+      const taskId = result.task_id;
+
+      setAiPrompt("");
+      setGenerationStatus("Track generation in progress...");
+
+      // Start polling for completion
+      pollForTrackCompletion(taskId, prompt);
+
+    } catch (error) {
+      console.error("Error generating track:", error);
+      setIsGeneratingTrack(false);
+      setGenerationStatus("");
+    }
+  };
+
+  const pollForTrackCompletion = async (taskId: string, originalPrompt: string) => {
+    const maxAttempts = 60; // 10 minutes max (60 * 10 seconds)
+    let attempts = 0;
+
+    const poll = async () => {
+      try {
+        attempts++;
+
+        const response = await fetch(`http://localhost:8000/get_generated_track?task_id=${taskId}`);
+
+        if (!response.ok) {
+          throw new Error("Failed to check track status");
+        }
+
+        const result = await response.json();
+
+        if (result.status === "composed") {
+          // Track generation completed - the tracks are now stored in our system
+          console.log("Track generation completed:", result);
+          setGenerationStatus("Track generation completed! Check the Tracks tab.");
+          setIsGeneratingTrack(false);
+          // Trigger tracks refresh
+          setTracksRefreshTrigger(prev => prev + 1);
+
+          // Clear status after a few seconds
+          setTimeout(() => {
+            setGenerationStatus("");
+          }, 5000);
+
+          return;
+        } else if (result.status === "running" || result.status === "composing") {
+          // Still processing
+          setGenerationStatus(`Track generation in progress... (${attempts}/${maxAttempts})`);
+          if (attempts < maxAttempts) {
+            setTimeout(poll, 10000); // Poll every 10 seconds
+          } else {
+            console.error("Track generation timed out");
+            setGenerationStatus("Track generation timed out. Please try again.");
+            setIsGeneratingTrack(false);
+            setTimeout(() => {
+              setGenerationStatus("");
+            }, 5000);
+          }
+        } else {
+          // Unknown status or error
+          console.error("Unexpected track generation status:", result.status);
+          setGenerationStatus(`Unexpected status: ${result.status}`);
+          setIsGeneratingTrack(false);
+          setTimeout(() => {
+            setGenerationStatus("");
+          }, 5000);
+        }
+      } catch (error) {
+        console.error("Error polling track status:", error);
+        setGenerationStatus("Error checking track status. Retrying...");
+        if (attempts < maxAttempts) {
+          setTimeout(poll, 10000); // Retry after 10 seconds
+        } else {
+          setIsGeneratingTrack(false);
+          setGenerationStatus("Failed to check track status. Please try again.");
+          setTimeout(() => {
+            setGenerationStatus("");
+          }, 5000);
+        }
+      }
     };
 
-    setBlocks((prev) => [...prev, newBlock]);
-    setAiPrompt("");
+    // Start polling
+    poll();
   };
 
   useEffect(() => {
@@ -234,6 +351,9 @@ export default function BeatMaker() {
         aiPrompt={aiPrompt}
         setAiPrompt={setAiPrompt}
         onSubmit={generateAIComponent}
+        tracksRefreshTrigger={tracksRefreshTrigger}
+        isGeneratingTrack={isGeneratingTrack}
+        generationStatus={generationStatus}
       />
     </div>
   );

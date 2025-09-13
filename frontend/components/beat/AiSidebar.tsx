@@ -16,13 +16,19 @@ import TracksPanel from "./TracksPanel";
 export interface AiSidebarProps {
   aiPrompt: string;
   setAiPrompt: (v: string) => void;
-  onSubmit: () => void;
+  onSubmit: (mode?: "beat" | "agent") => void;
+  tracksRefreshTrigger?: number;
+  isGeneratingTrack?: boolean;
+  generationStatus?: string;
 }
 
 export default function AiSidebar({
   aiPrompt,
   setAiPrompt,
   onSubmit,
+  tracksRefreshTrigger,
+  isGeneratingTrack,
+  generationStatus,
 }: AiSidebarProps) {
   const [mode, setMode] = useState<"beat" | "agent">("beat");
   const placeholder =
@@ -50,7 +56,18 @@ export default function AiSidebar({
         </div>
 
         <TabsContent value="chat" className="flex-1 m-0 flex flex-col">
-          <div className="flex-1 p-4 space-y-4 overflow-y-auto"></div>
+          <div className="flex-1 p-4 space-y-4 overflow-y-auto">
+            {generationStatus && (
+              <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
+                <div className="flex items-center gap-2 text-blue-400 text-sm">
+                  {isGeneratingTrack && (
+                    <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                  )}
+                  {generationStatus}
+                </div>
+              </div>
+            )}
+          </div>
 
           <div className="p-4">
             <div className="bg-[#2F2F2F] rounded-lg p-3 space-y-2 border border-[#484848]">
@@ -60,7 +77,7 @@ export default function AiSidebar({
                 placeholder={placeholder}
                 className="bg-transparent border-none text-white placeholder-gray-500 p-0 focus-visible:ring-0"
                 onKeyPress={(e) => {
-                  if (e.key === "Enter") onSubmit();
+                  if (e.key === "Enter") onSubmit(mode);
                 }}
               />
 
@@ -100,11 +117,11 @@ export default function AiSidebar({
                 </DropdownMenu>
 
                 <Button
-                  onClick={onSubmit}
+                  onClick={() => onSubmit(mode)}
                   variant="ghost"
                   size="sm"
                   className="h-8 w-8 p-0 text-gray-400 hover:text-white"
-                  disabled={!aiPrompt.trim()}
+                  disabled={!aiPrompt.trim() || (mode === "beat" && isGeneratingTrack)}
                   aria-label={
                     mode === "beat" ? "Submit to beatmaker" : "Submit to agent"
                   }
@@ -124,7 +141,7 @@ export default function AiSidebar({
         </TabsContent>
 
         <TabsContent value="tracks" className="flex-1 m-0 flex flex-col">
-          <TracksPanel />
+          <TracksPanel refreshTrigger={tracksRefreshTrigger} />
         </TabsContent>
       </Tabs>
     </div>

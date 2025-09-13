@@ -29,7 +29,11 @@ interface Track {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-export default function TracksPanel() {
+interface TracksPanelProps {
+  refreshTrigger?: number;
+}
+
+export default function TracksPanel({ refreshTrigger }: TracksPanelProps) {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [loading, setLoading] = useState(true);
   const [playingTrack, setPlayingTrack] = useState<string | null>(null);
@@ -54,6 +58,12 @@ export default function TracksPanel() {
   useEffect(() => {
     fetchTracks();
   }, []);
+
+  useEffect(() => {
+    if (refreshTrigger) {
+      fetchTracks();
+    }
+  }, [refreshTrigger]);
 
   const handlePlayTrack = async (trackId: string) => {
     if (playingTrack === trackId) {
