@@ -38,71 +38,7 @@ const initialTracks: Track[] = [
   },
 ];
 
-const initialBlocks: MusicBlock[] = [
-  {
-    id: "block-1",
-    name: "Piano Melody",
-    type: "melody",
-    color: "bg-blue-600",
-    startTime: 8,
-    duration: 24,
-    track: 0,
-  },
-  {
-    id: "block-2",
-    name: "Bass Line",
-    type: "bass",
-    color: "bg-cyan-500",
-    startTime: 16,
-    duration: 32,
-    track: 1,
-  },
-  {
-    id: "block-3",
-    name: "Kick",
-    type: "drums",
-    color: "bg-violet-600",
-    startTime: 0,
-    duration: 4,
-    track: 2,
-  },
-  {
-    id: "block-4",
-    name: "Kick",
-    type: "drums",
-    color: "bg-violet-600",
-    startTime: 8,
-    duration: 4,
-    track: 2,
-  },
-  {
-    id: "block-5",
-    name: "Kick",
-    type: "drums",
-    color: "bg-violet-600",
-    startTime: 16,
-    duration: 4,
-    track: 2,
-  },
-  {
-    id: "block-6",
-    name: "Kick",
-    type: "drums",
-    color: "bg-violet-600",
-    startTime: 24,
-    duration: 4,
-    track: 2,
-  },
-  {
-    id: "block-7",
-    name: "Kick",
-    type: "drums",
-    color: "bg-violet-600",
-    startTime: 32,
-    duration: 4,
-    track: 2,
-  },
-];
+const initialBlocks: MusicBlock[] = [];
 
 const TIMELINE_WIDTH = 800;
 const TIMELINE_MEASURES = 64; // measures instead of seconds
@@ -135,28 +71,68 @@ export default function BeatMaker() {
     };
   }, []);
 
-  const startPlayback = () => {
+  const startPlayback = async () => {
     if (!isPlaying) {
+      console.log('🎵 Starting playback...');
+      console.log('Tracks:', tracks.length);
+      console.log('Tracks with audio:', tracks.filter(t => t.audioFile || t.audioBlob));
+      console.log('Audio refs map size:', trackAudioRefs.current.size);
+      console.log('Current time:', currentTime);
+      
+      // Initialize audio context with user gesture
+      if (audioContextRef.current?.state === 'suspended') {
+        try {
+          await audioContextRef.current.resume();
+          console.log('✅ Audio context resumed');
+        } catch (error) {
+          console.error('❌ Failed to resume audio context:', error);
+        }
+      }
+      
       setIsPlaying(true);
       
-      // Start playing all track audio that should be playing at current time
-      tracks.forEach(track => {
-        if ((track.audioFile || track.audioBlob) && !track.muted) {
-          const audioElement = trackAudioRefs.current.get(track.id);
-          if (audioElement && audioElement.duration && isFinite(audioElement.duration)) {
-            const targetTime = (currentTime / TIMELINE_MEASURES) * audioElement.duration;
-            if (isFinite(targetTime) && targetTime >= 0) {
-              audioElement.currentTime = targetTime;
-            }
-            audioElement.volume = track.volume / 100;
-            audioElement.play().catch(console.error);
-          }
-        }
-      });
+      // Audio will be triggered by blocks during timeline progression
+      console.log(`🎵 Playback started, will trigger audio based on block positions`);
       
       intervalRef.current = setInterval(() => {
         setCurrentTime((prev) => {
           const newTime = prev + 0.25; // quarter beat increments
+          
+          // Check if any blocks should start playing at this time
+          blocks.forEach(block => {
+            const track = tracks[block.track];
+            if (track && (track.audioFile || track.audioBlob) && !track.muted) {
+              const audioElement = trackAudioRefs.current.get(track.id);
+              
+              if (audioElement) {
+                // Check if blue line just entered this block
+                const wasBeforeBlock = prev < block.startTime;
+                const isInBlock = newTime >= block.startTime && newTime < (block.startTime + block.duration);
+                
+                if (wasBeforeBlock && isInBlock) {
+                  console.log(`🎶 Blue line hit block "${block.name}" at time ${newTime}`);
+                  audioElement.currentTime = 0;
+                  audioElement.volume = track.volume / 100;
+                  audioElement.play().then(() => {
+                    console.log(`✅ Playing ${block.name}`);
+                  }).catch(error => {
+                    console.error(`❌ Failed to play ${block.name}:`, error);
+                  });
+                }
+                
+                // Check if blue line just exited this block
+                const wasInBlock = prev >= block.startTime && prev < (block.startTime + block.duration);
+                const isAfterBlock = newTime >= (block.startTime + block.duration);
+                
+                if (wasInBlock && isAfterBlock) {
+                  console.log(`⏹️ Blue line exited block "${block.name}" at time ${newTime}`);
+                  audioElement.pause();
+                  audioElement.currentTime = 0;
+                }
+              }
+            }
+          });
+          
           return newTime >= TIMELINE_MEASURES ? 0 : newTime;
         });
       }, (60 / bpm / 4) * 1000); // quarter note timing based on BPM
@@ -307,6 +283,32 @@ export default function BeatMaker() {
     audioElement.loop = false;
     audioElement.preload = 'metadata';
     trackAudioRefs.current.set(trackId, audioElement);
+    
+    // Create a music block at the start of the timeline (time 0)
+    // Duration will be set once audio metadata loads
+    const newBlock: MusicBlock = {
+      id: `block-${Date.now()}`,
+      name: fileName,
+      type: "melody",
+      color: trackColors[tracks.length % trackColors.length],
+      startTime: 0, // Always start at beginning
+      duration: 8, // Temporary duration, will be updated
+      track: tracks.length, // Use the new track index
+    };
+    
+    setBlocks((prev) => [...prev, newBlock]);
+    
+    // Update block duration once audio metadata loads
+    audioElement.addEventListener('loadedmetadata', () => {
+      const audioDurationInMeasures = (audioElement.duration / 60) * (160 / 4); // Convert to measures based on BPM
+      setBlocks(prevBlocks => 
+        prevBlocks.map(block => 
+          block.id === newBlock.id 
+            ? { ...block, duration: Math.max(1, audioDurationInMeasures) }
+            : block
+        )
+      );
+    });
   };
 
   const handleRecordingComplete = (audioBlob: Blob) => {
@@ -343,31 +345,74 @@ export default function BeatMaker() {
     const audioElement = new Audio(URL.createObjectURL(audioBlob));
     audioElement.loop = false;
     audioElement.preload = 'metadata';
-    trackAudioRefs.current.set(trackId, audioElement);
     
-    // If there's an insertion point, create a music block at that position
-    if (insertionPoint) {
-      const newBlock: MusicBlock = {
-        id: `block-${Date.now()}`,
-        name: trackName,
-        type: "melody",
-        color: trackColor,
-        startTime: Math.floor(insertionPoint.time),
-        duration: 8, // Default duration of 8 measures
-        track: insertionPoint.trackIndex,
-      };
-      
-      setBlocks((prev) => [...prev, newBlock]);
-      setInsertionPoint(null); // Clear insertion point
-    }
+    // Add comprehensive event listeners for debugging
+    audioElement.addEventListener('loadedmetadata', () => {
+      console.log(`📊 Audio metadata loaded for ${trackName}:`, {
+        duration: audioElement.duration,
+        readyState: audioElement.readyState
+      });
+    });
+    
+    audioElement.addEventListener('canplay', () => {
+      console.log(`▶️ Audio can play: ${trackName}`);
+    });
+    
+    audioElement.addEventListener('error', (e) => {
+      console.error(`❌ Audio error for ${trackName}:`, e);
+    });
+    
+    trackAudioRefs.current.set(trackId, audioElement);
+    console.log(`🎤 Created audio element for ${trackName}:`, {
+      trackId,
+      src: audioElement.src.substring(0, 50) + '...',
+      preload: audioElement.preload
+    });
+    
+    // Create a music block at the start of the timeline (time 0)
+    // Duration will be set once audio metadata loads
+    const newBlock: MusicBlock = {
+      id: `block-${Date.now()}`,
+      name: trackName,
+      type: "melody",
+      color: trackColor,
+      startTime: 0, // Always start at beginning
+      duration: 8, // Temporary duration, will be updated
+      track: tracks.length, // Use the new track index
+    };
+    
+    setBlocks((prev) => [...prev, newBlock]);
+    
+    // Update block duration once audio metadata loads
+    audioElement.addEventListener('loadedmetadata', () => {
+      const audioDurationInMeasures = (audioElement.duration / 60) * (bpm / 4); // Convert to measures based on BPM
+      setBlocks(prevBlocks => 
+        prevBlocks.map(block => 
+          block.id === newBlock.id 
+            ? { ...block, duration: Math.max(1, audioDurationInMeasures) }
+            : block
+        )
+      );
+    });
   };
 
+  // Timeline click no longer needed for insertion points
   const handleTimelineClick = (time: number, trackIndex: number) => {
-    setInsertionPoint({ time, trackIndex });
+    // Could be used for other timeline interactions in the future
   };
 
   const handleTimeChange = (time: number) => {
     setCurrentTime(time);
+  };
+
+  const handleBlockMove = (blockId: string, newTime: number, newTrackIndex: number) => {
+    setBlocks(prevBlocks => 
+      prevBlocks.map(block => 
+        block.id === blockId 
+          ? { ...block, startTime: newTime, track: newTrackIndex }
+          : block
+      )
+    );
   };
 
   return (
@@ -398,6 +443,7 @@ export default function BeatMaker() {
           onBlockClick={handleBlockClick}
           onTimelineClick={handleTimelineClick}
           onTimeChange={handleTimeChange}
+          onBlockMove={handleBlockMove}
           insertionPoint={insertionPoint}
           totalMeasures={TIMELINE_MEASURES}
         />

@@ -11,6 +11,7 @@ export interface BeatTimelineProps {
   onBlockClick: (id: string) => void;
   onTimelineClick?: (time: number, trackIndex: number) => void;
   onTimeChange?: (time: number) => void;
+  onBlockMove?: (blockId: string, newTime: number, newTrackIndex: number) => void;
   insertionPoint?: {time: number, trackIndex: number} | null;
   totalMeasures: number;
 }
@@ -26,7 +27,7 @@ function TimeMarkers({ totalMeasures }: { totalMeasures: number }) {
           style={{ left: `${(i / totalMeasures) * 100}%` }}
         >
           <span className="absolute -top-8 -left-3 text-sm text-white font-mono font-bold">
-            {i + 1}
+            {i}
           </span>
         </div>
       );
@@ -38,7 +39,7 @@ function TimeMarkers({ totalMeasures }: { totalMeasures: number }) {
           style={{ left: `${(i / totalMeasures) * 100}%` }}
         >
           <span className="absolute -top-7 -left-2 text-xs text-white/80 font-mono">
-            {i + 1}
+            {i}
           </span>
         </div>
       );
@@ -66,11 +67,12 @@ export default function BeatTimeline({
   onBlockClick,
   onTimelineClick,
   onTimeChange,
+  onBlockMove,
   insertionPoint,
   totalMeasures,
 }: BeatTimelineProps) {
   const handleTimelineClick = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (!onTimelineClick) return;
+    if (!onTimelineClick || !event.currentTarget) return;
     
     const rect = event.currentTarget.getBoundingClientRect();
     const x = event.clientX - rect.left;
@@ -95,6 +97,7 @@ export default function BeatTimeline({
     event.stopPropagation();
     
     const handleMouseMove = (e: MouseEvent) => {
+      if (!event.currentTarget) return;
       const rect = event.currentTarget.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const timePosition = Math.max(0, Math.min((x / rect.width) * totalMeasures, totalMeasures));
@@ -131,6 +134,31 @@ export default function BeatTimeline({
           <div 
             className="flex-1 min-h-[calc(100vh-280px)] bg-background border border-border rounded relative overflow-hidden cursor-crosshair"
             onClick={handleTimelineClick}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = 'move';
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              const blockId = e.dataTransfer.getData('text/plain');
+              const rect = e.currentTarget.getBoundingClientRect();
+              const x = e.clientX - rect.left;
+              const y = e.clientY - rect.top;
+              
+              // Calculate new position
+              const newTime = Math.max(0, (x / rect.width) * totalMeasures);
+              const trackHeight = rect.height / tracks.length;
+              const newTrackIndex = Math.floor(y / trackHeight);
+              
+              // Snap to grid
+              const snappedTime = Math.round(newTime * 4) / 4;
+              const clampedTrackIndex = Math.max(0, Math.min(newTrackIndex, tracks.length - 1));
+              
+              // Update block position
+              if (onBlockMove) {
+                onBlockMove(blockId, snappedTime, clampedTrackIndex);
+              }
+            }}
           >
             {Array.from({ length: totalMeasures + 1 }, (_, i) => (
               <div
@@ -198,7 +226,7 @@ export default function BeatTimeline({
                 key={block.id}
                 className={`absolute ${
                   block.color
-                } rounded cursor-pointer border-2 transition-all ${
+                } rounded cursor-move border-2 transition-all ${
                   selectedBlock === block.id
                     ? "border-white"
                     : "border-transparent"
@@ -210,6 +238,14 @@ export default function BeatTimeline({
                   height: `${60 / tracks.length - 2}%`,
                 }}
                 onClick={() => onBlockClick(block.id)}
+                draggable={true}
+                onDragStart={(e) => {
+                  e.dataTransfer.setData('text/plain', block.id);
+                  e.dataTransfer.effectAllowed = 'move';
+                }}
+                onDragEnd={(e) => {
+                  e.preventDefault();
+                }}
               >
                 <div className="p-2 h-full flex items-center">
                   <span className="text-xs font-medium text-white truncate">
