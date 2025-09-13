@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import BeatHeader from "@/components/beat/BeatHeader";
 import BeatTimeline from "@/components/beat/BeatTimeline";
 import AiSidebar from "@/components/beat/AiSidebar";
+import { TracksSidebar } from "@/components/beat/TracksSidebar";
 import { MusicBlock, Track } from "@/components/beat/types";
 
 const initialTracks: Track[] = [
@@ -187,8 +188,31 @@ export default function BeatMaker() {
     };
   }, []);
 
+  const handleVolumeChange = (trackId: string, volume: number) => {
+    setTracks(
+      tracks.map((track) =>
+        track.id === trackId ? { ...track, volume } : track
+      )
+    );
+  };
+
+  const handleMuteToggle = (trackId: string) => {
+    setTracks(
+      tracks.map((track) =>
+        track.id === trackId ? { ...track, muted: !track.muted } : track
+      )
+    );
+  };
+
   return (
     <div className="flex h-screen bg-background text-foreground">
+      <div className="border-r border-border">
+        <TracksSidebar
+          tracks={tracks}
+          onVolumeChange={handleVolumeChange}
+          onMuteToggle={handleMuteToggle}
+        />
+      </div>
       <div className="flex-1 flex flex-col">
         <BeatHeader
           bpm={bpm}
