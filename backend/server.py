@@ -18,10 +18,42 @@ import json
 import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
+from dotenv import load_dotenv
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Load environment variables
+load_dotenv()
+
+# Configuration
+BEATOVEN_API_KEY = os.getenv("BEATOVEN_API_KEY")
+
+def get_beatoven_headers():
+    """Get authorization headers for Beatoven AI API."""
+    if not BEATOVEN_API_KEY:
+        raise HTTPException(
+            status_code=500,
+            detail="BEATOVEN_API_KEY environment variable is not set"
+        )
+    return {"Authorization": f"Bearer {BEATOVEN_API_KEY}"}
+
+# Pydantic models for Beatoven AI API
+class PromptModel(BaseModel):
+    text: str
+
+class TrackGenerationRequest(BaseModel):
+    prompt: PromptModel
+    format: Optional[str] = "wav"
+    looping: Optional[bool] = False
+
+class TrackGenerationResponse(BaseModel):
+    status: str
+    task_id: str
+
+class TrackStatusRequest(BaseModel):
+    task_id: str
 
 app = FastAPI(title="Lavoe Audio Processing API", version="1.0.0")
 
