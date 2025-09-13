@@ -59,3 +59,21 @@ def add_reverb(y, sample_rate=44100, room_size=0.5, damping=0.5, wet_level=0.3, 
         y_reverb = y_reverb.T if y.shape[0] > y.shape[1] else y_reverb
     
     return y_reverb
+
+
+def adjust_pitch(y, sr, semitones):
+    """
+    Adjust the pitch of audio data by a specified number of semitones.
+    
+    Args:
+        y: Audio data as numpy array
+        sr: Sample rate of the audio
+        semitones: Number of semitones to shift (positive for higher pitch, negative for lower)
+    
+    Returns:
+        Audio data with pitch adjusted
+    """
+    # Use librosa's pitch_shift function
+    y_shifted = librosa.effects.pitch_shift(y, sr=sr, n_steps=semitones)
+    
+    return y_shifted
