@@ -2,7 +2,6 @@
 
 import { Button } from "@/components/ui/button";
 import { Pause, Play, RotateCcw, Square } from "lucide-react";
-import { Dispatch, SetStateAction } from "react";
 
 export interface BeatHeaderProps {
   bpm: number;
