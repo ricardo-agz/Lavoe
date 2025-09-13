@@ -17,132 +17,135 @@ export function TracksSidebar({ tracks, onVolumeChange, onMuteToggle }: TracksSi
   const [activeView, setActiveView] = useState<'tracks' | 'record' | null>(null)
   
   return (
-    <div className="h-full bg-black flex">
-      {/* Left Navigation */}
-      <div className="w-[80px] bg-black flex flex-col">
-        <div className="h-14 flex items-center justify-center border-b border-gray-900">
-          <img 
-            src="/Lavoe.png"
-            alt="Lavoe"
-            className="h-4 w-auto"
-          />
-        </div>
-
-        <div className="flex flex-col items-center pt-3 gap-2">
-          <Button
-            variant="ghost"
-            className={`w-12 h-12 rounded-lg flex flex-col items-center justify-center gap-1.5 group ${
-              activeView === 'tracks' ? 'bg-gray-800/50' : 'hover:bg-gray-800/30'
-            }`}
-            onClick={() => setActiveView(activeView === 'tracks' ? null : 'tracks')}
-          >
-            <div className={`w-6 h-6 rounded-md flex items-center justify-center transition-colors ${
-              activeView === 'tracks' ? 'bg-indigo-500' : 'bg-gray-700 group-hover:bg-gray-600'
-            }`}>
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                <rect x="2" y="3" width="12" height="2" rx="1" fill="currentColor"/>
-                <rect x="2" y="7" width="12" height="2" rx="1" fill="currentColor"/>
-                <rect x="2" y="11" width="12" height="2" rx="1" fill="currentColor"/>
-              </svg>
-            </div>
-            <span className="text-[10px] text-gray-400">Tracks</span>
-          </Button>
-          
-          <Button
-            variant="ghost"
-            className={`w-12 h-12 rounded-lg flex flex-col items-center justify-center gap-1.5 group ${
-              activeView === 'record' ? 'bg-gray-800/50' : 'hover:bg-gray-800/30'
-            }`}
-            onClick={() => setActiveView(activeView === 'record' ? null : 'record')}
-          >
-            <div className={`w-6 h-6 rounded-md flex items-center justify-center transition-colors ${
-              activeView === 'record' ? 'bg-indigo-500' : 'bg-gray-700 group-hover:bg-gray-600'
-            }`}>
-              <Mic className="h-3.5 w-3.5 text-white" />
-            </div>
-            <span className="text-[10px] text-gray-400">Record</span>
-          </Button>
-        </div>
+    <div className="h-full bg-black flex flex-col">
+      {/* Header with Logo */}
+      <div className="h-14 flex items-center justify-front px-3">
+        <img 
+          src="/Lavoe.png"
+          alt="Lavoe"
+          className="h-5 w-auto"
+        />
       </div>
 
-      {/* Content Area */}
-      {/* Content Area */}
-      {activeView === 'tracks' && (
-        <div className="w-[250px] bg-black border-r border-gray-900">
-          <div className="h-14 flex items-center px-4 border-b border-gray-900">
-            <span className="text-sm font-medium text-gray-200">Tracks</span>
-            <Button 
-              variant="ghost" 
-              size="icon"
-              className="h-7 w-7 rounded-md ml-auto hover:bg-gray-800"
+      {/* Main Container */}
+      <div className="flex-1 flex">
+        {/* Left Navigation */}
+        <div className="w-[88px] border-r border-gray-900 flex flex-col">
+          <div className="flex flex-col items-center pt-3 gap-2">
+            <Button
+              variant="ghost"
+              className={`w-16 h-16 rounded-xl flex flex-col items-center justify-center gap-2 group ${
+                activeView === 'tracks' ? 'bg-gray-800/50' : 'hover:bg-gray-800/30'
+              }`}
+              onClick={() => setActiveView(activeView === 'tracks' ? null : 'tracks')}
             >
-              <Plus className="h-3.5 w-3.5 text-gray-400" />
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
+                activeView === 'tracks' ? 'bg-indigo-500' : 'bg-gray-700 group-hover:bg-gray-600'
+              }`}>
+                <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
+                  <rect x="2" y="3" width="12" height="2" rx="1" fill="currentColor"/>
+                  <rect x="2" y="7" width="12" height="2" rx="1" fill="currentColor"/>
+                  <rect x="2" y="11" width="12" height="2" rx="1" fill="currentColor"/>
+                </svg>
+              </div>
+              <span className="text-[11px] text-gray-400">Tracks</span>
+            </Button>
+            
+            <Button
+              variant="ghost"
+              className={`w-16 h-16 rounded-xl flex flex-col items-center justify-center gap-2 group ${
+                activeView === 'record' ? 'bg-gray-800/50' : 'hover:bg-gray-800/30'
+              }`}
+              onClick={() => setActiveView(activeView === 'record' ? null : 'record')}
+            >
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
+                activeView === 'record' ? 'bg-indigo-500' : 'bg-gray-700 group-hover:bg-gray-600'
+              }`}>
+                <Mic className="h-4.5 w-4.5 text-white" />
+              </div>
+              <span className="text-[11px] text-gray-400">Record</span>
             </Button>
           </div>
-          
-          <ScrollArea className="h-[calc(100vh-3.5rem)]">
-            <div className="p-3 space-y-1">
-              {tracks.map((track) => (
-                <div key={track.id} className="group px-2 py-2 rounded-lg hover:bg-gray-800/30">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-0.5 h-[18px] ${track.color} rounded-full`} />
-                      <span className="text-xs font-medium text-gray-300">
-                        {track.name}
-                      </span>
-                    </div>
-                    <div className="flex items-center">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => onMuteToggle(track.id)}
-                        className="h-7 w-7 rounded-md hover:bg-gray-800"
-                      >
-                        <Volume2 className={`h-3.5 w-3.5 ${track.muted ? "text-gray-600" : "text-gray-400"}`} />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 rounded-md hover:bg-gray-800 opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <MoreHorizontal className="h-3.5 w-3.5 text-gray-400" />
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="px-3">
-                    <Slider
-                      value={[track.volume]}
-                      min={0}
-                      max={100}
-                      step={1}
-                      onValueChange={(value) => onVolumeChange(track.id, value[0])}
-                      className={track.muted ? "opacity-50" : ""}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </ScrollArea>
         </div>
-      )}
 
-      {activeView === 'record' && (
-        <div className="w-[280px] bg-black border-r border-gray-900">
-          <div className="h-14 flex items-center px-4 border-b border-gray-900">
-            <span className="text-sm font-medium text-gray-200">Record</span>
+        {/* Content Area */}
+        {activeView === 'tracks' && (
+          <div className="flex-1 bg-black border-t border-gray-900">
+            <div className="h-14 flex items-center px-4">
+              <span className="text-sm font-medium text-gray-200">Tracks</span>
+              <Button 
+                variant="ghost" 
+                size="icon"
+                className="h-7 w-7 rounded-md ml-auto hover:bg-gray-800"
+              >
+                <Plus className="h-3.5 w-3.5 text-gray-400" />
+              </Button>
+            </div>
+            
+            <ScrollArea className="h-[calc(100vh-7rem)]">
+              <div className="p-3 space-y-1">
+                {tracks.map((track) => (
+                  <div key={track.id} className="group px-2 py-2 rounded-lg hover:bg-gray-800/30">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-0.5 h-[18px] ${track.color} rounded-full`} />
+                        <span className="text-xs font-medium text-gray-300">
+                          {track.name}
+                        </span>
+                      </div>
+                      <div className="flex items-center">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => onMuteToggle(track.id)}
+                          className="h-7 w-7 rounded-md hover:bg-gray-800"
+                        >
+                          <Volume2 className={`h-3.5 w-3.5 ${track.muted ? "text-gray-600" : "text-gray-400"}`} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 rounded-md hover:bg-gray-800 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <MoreHorizontal className="h-3.5 w-3.5 text-gray-400" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="px-3">
+                      <Slider
+                        value={[track.volume]}
+                        min={0}
+                        max={100}
+                        step={1}
+                        onValueChange={(value) => onVolumeChange(track.id, value[0])}
+                        className={track.muted ? "opacity-50" : ""}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
           </div>
-          
-          <div className="p-4">
-            <Button 
-              variant="secondary"
-              className="w-full h-10 bg-gray-800/50 hover:bg-gray-800 text-gray-300 rounded-lg"
-            >
-              <Mic className="mr-2 h-3.5 w-3.5" />
-              Click to Record
-            </Button>
+        )}
+
+        {activeView === 'record' && (
+          <div className="flex-1 bg-black border-t border-gray-900">
+            <div className="h-14 flex items-center px-4">
+              <span className="text-sm font-medium text-gray-200">Record</span>
+            </div>
+            
+            <div className="p-4">
+              <Button 
+                variant="secondary"
+                className="w-full h-10 bg-gray-800/50 hover:bg-gray-800 text-gray-300 rounded-lg"
+              >
+                <Mic className="mr-2 h-3.5 w-3.5" />
+                Click to Record
+              </Button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }
