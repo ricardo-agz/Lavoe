@@ -104,16 +104,18 @@ export default function BeatMaker() {
           // Check if any blocks should start playing at this time
           blocks.forEach(block => {
             const track = tracks[block.track];
-            if (track && !track.muted) {
+            if (track && (track.audioFile || track.audioBlob) && !track.muted) {
               const audioElement = trackAudioRefs.current.get(track.id);
-              console.log("running for track", track, audioElement, trackAudioRefs.current)
               
               if (audioElement) {
                 // Check if blue line just entered this block
                 const wasBeforeBlock = prev < block.startTime;
                 const isInBlock = newTime >= block.startTime && newTime < (block.startTime + block.duration);
                 
-                if (wasBeforeBlock && isInBlock) {
+                // Special case: if block starts at 0 and we're at the beginning of playback
+                const isStartingAtZero = block.startTime === 0 && prev === 0 && newTime >= 0;
+                
+                if ((wasBeforeBlock && isInBlock) || isStartingAtZero) {
                   console.log(`🎶 Blue line hit block "${block.name}" at time ${newTime}`);
                   audioElement.currentTime = 0;
                   audioElement.volume = track.volume / 100;
@@ -602,8 +604,6 @@ export default function BeatMaker() {
         audioFile: audioFile, // Store the file reference for local playback
       };
 
-      console.log("created new track on editor", newTrack)
-
       setTracks((prev) => [...prev, newTrack]);
 
       // Create audio element for timeline playback
@@ -659,7 +659,7 @@ export default function BeatMaker() {
     setBlocks(prevBlocks => 
       prevBlocks.map(block => 
         block.id === blockId 
-          ? { ...block, startTime: newTime }
+          ? { ...block, startTime: newTime, track: newTrackIndex }
           : block
       )
     );

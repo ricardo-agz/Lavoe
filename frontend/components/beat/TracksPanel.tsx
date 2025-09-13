@@ -190,7 +190,7 @@ export default function TracksPanel({ refreshTrigger, onAddToEditor }: TracksPan
     <div className="flex flex-col h-full max-h-full overflow-hidden">
       <div className="flex-shrink-0 p-4 border-b border-border">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold">Audio Tracks</h3>
+          <h3 className="text-lg font-semibold">Catalog Tracks</h3>
           <Button
             variant="outline"
             size="sm"
