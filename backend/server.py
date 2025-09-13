@@ -448,6 +448,122 @@ async def chop_audio_base64(input_data: ChopInput, request: Request):
             os.unlink(temp_file_path)
 
 
+@app.post("/start_track_generation")
+async def start_track_generation(request: TrackGenerationRequest):
+    """
+    Start track generation using Beatoven AI API.
+    
+    Args:
+        request: The track generation request containing prompt and options
+        
+    Returns:
+        The task ID and status from Beatoven AI
+    """
+    try:
+        # Prepare the payload for Beatoven AI
+        payload = {
+            "prompt": {
+                "text": request.prompt.text
+            },
+            "format": request.format,
+            "looping": request.looping
+        }
+        
+        # Send request to Beatoven AI
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://public-api.beatoven.ai/api/v1/tracks/compose",
+                json=payload,
+                headers=get_beatoven_headers(),
+                timeout=30.0
+            )
+            response.raise_for_status()
+            
+            # Return the response from Beatoven AI
+            return response.json()
+            
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=e.response.status_code,
+            detail=f"Beatoven AI API error: {e.response.text}"
+        ) from e
+    except httpx.RequestError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Request to Beatoven AI failed: {str(e)}"
+        ) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected error: {str(e)}"
+        ) from e
+
+
+@app.get("/get_generated_track")
+async def get_generated_track(task_id: str):
+    """
+    Get the status and download URL for a generated track.
+    
+    Args:
+        task_id: The task ID returned from start_track_generation
+        
+    Returns:
+        The track status and metadata, or the audio file if completed
+    """
+    try:
+        # Send request to Beatoven AI to check task status
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"https://public-api.beatoven.ai/api/v1/tasks/{task_id}",
+                headers=get_beatoven_headers(),
+                timeout=30.0
+            )
+            response.raise_for_status()
+            
+            task_data = response.json()
+            
+            # If track is still being processed, return the status
+            if task_data.get("status") in ["running", "composing"]:
+                return task_data
+            
+            # If track is composed, download and return the audio file
+            if task_data.get("status") == "composed" and "meta" in task_data:
+                track_url = task_data["meta"].get("track_url")
+                if not track_url:
+                    raise HTTPException(status_code=500, detail="Track URL not found in response")
+                
+                # Download the audio file
+                audio_response = await client.get(track_url, timeout=60.0)
+                audio_response.raise_for_status()
+                
+                # Return the audio file
+                return Response(
+                    content=audio_response.content,
+                    media_type="audio/mpeg",
+                    headers={
+                        "Content-Disposition": f"attachment; filename=generated_track_{task_id}.mp3"
+                    }
+                )
+            
+            # For any other status, return the raw response
+            return task_data
+            
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=e.response.status_code,
+            detail=f"Beatoven AI API error: {e.response.text}"
+        ) from e
+    except httpx.RequestError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Request to Beatoven AI failed: {str(e)}"
+        ) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected error: {str(e)}"
+        ) from e
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
