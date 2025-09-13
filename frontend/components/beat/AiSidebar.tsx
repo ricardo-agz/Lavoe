@@ -45,28 +45,19 @@ export default function AiSidebar({
           <div className="flex items-center justify-between">
             <DropdownMenu>
               <DropdownMenuTrigger>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 px-2 text-gray-400 hover:text-white"
-                  aria-haspopup="menu"
-                  aria-label="Choose submit mode"
-                  title="Choose submit mode"
-                >
-                  {mode === "beat" ? (
-                    <div className="flex items-center gap-1">
-                      <WandSparkles className="w-4 h-4" />
-                      <span className="text-xs">Beatmaker</span>
-                      <ChevronUp className="w-3 h-3" />
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-1">
-                      <ArrowUp className="w-4 h-4" />
-                      <span className="text-xs">Agent</span>
-                      <ChevronUp className="w-3 h-3" />
-                    </div>
-                  )}
-                </Button>
+                {mode === "beat" ? (
+                  <div className="flex items-center gap-1">
+                    <WandSparkles className="w-4 h-4" />
+                    <span className="text-xs">Beatmaker</span>
+                    <ChevronUp className="w-3 h-3" />
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1">
+                    <ArrowUp className="w-4 h-4" />
+                    <span className="text-xs">Agent</span>
+                    <ChevronUp className="w-3 h-3" />
+                  </div>
+                )}
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 side="top"
