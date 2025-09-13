@@ -20,6 +20,7 @@ export interface AiSidebarProps {
   tracksRefreshTrigger?: number;
   isGeneratingTrack?: boolean;
   generationStatus?: string;
+  onAddTrackToEditor?: (trackId: string, filename: string) => void;
 }
 
 export default function AiSidebar({
@@ -29,6 +30,7 @@ export default function AiSidebar({
   tracksRefreshTrigger,
   isGeneratingTrack,
   generationStatus,
+  onAddTrackToEditor,
 }: AiSidebarProps) {
   const [mode, setMode] = useState<"beat" | "agent">("beat");
   const placeholder =
@@ -141,7 +143,10 @@ export default function AiSidebar({
         </TabsContent>
 
         <TabsContent value="tracks" className="flex-1 m-0 flex flex-col min-h-0">
-          <TracksPanel refreshTrigger={tracksRefreshTrigger} />
+          <TracksPanel
+            refreshTrigger={tracksRefreshTrigger}
+            onAddToEditor={onAddTrackToEditor}
+          />
         </TabsContent>
       </Tabs>
     </div>

@@ -12,7 +12,8 @@ import {
   Music2,
   Clock,
   FileAudio,
-  RefreshCw
+  RefreshCw,
+  Plus
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -31,9 +32,10 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 interface TracksPanelProps {
   refreshTrigger?: number;
+  onAddToEditor?: (trackId: string, filename: string) => void;
 }
 
-export default function TracksPanel({ refreshTrigger }: TracksPanelProps) {
+export default function TracksPanel({ refreshTrigger, onAddToEditor }: TracksPanelProps) {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [loading, setLoading] = useState(true);
   const [playingTrack, setPlayingTrack] = useState<string | null>(null);
@@ -273,6 +275,16 @@ export default function TracksPanel({ refreshTrigger }: TracksPanelProps) {
                       >
                         <Download className="w-3 h-3" />
                       </Button>
+                      {onAddToEditor && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onAddToEditor(track.track_id, track.filename)}
+                          title="Add to Editor"
+                        >
+                          <Plus className="w-3 h-3" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </CardContent>
