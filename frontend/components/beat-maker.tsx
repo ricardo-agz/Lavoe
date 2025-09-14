@@ -1127,6 +1127,64 @@ export default function BeatMaker() {
     }
   };
 
+  const handleDeleteSelectedBlock = () => {
+    if (!selectedBlock) return;
+
+    // Find the block to delete
+    const blockToDelete = blocks.find((b) => b.id === selectedBlock);
+    if (!blockToDelete) return;
+
+    // If audio is currently playing for this block, stop it
+    const isInBlockWindow =
+      currentTime >= blockToDelete.startTime &&
+      currentTime < blockToDelete.startTime + blockToDelete.duration;
+
+    if (isInBlockWindow) {
+      const trackForBlock = tracks[blockToDelete.track];
+      const audioKey = blockToDelete.trackId || trackForBlock?.id;
+      if (audioKey) {
+        const audioElement = trackAudioRefs.current.get(audioKey);
+        if (audioElement) {
+          audioElement.pause();
+          try {
+            audioElement.currentTime = 0;
+          } catch {}
+        }
+      }
+    }
+
+    // Remove the block from UI state
+    setBlocks((prev) => prev.filter((b) => b.id !== selectedBlock));
+    setSelectedBlock(null);
+  };
+
+  // Global key handler for Delete/Backspace to remove selected block
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Delete" && e.key !== "Backspace") return;
+
+      const target = e.target as HTMLElement | null;
+      if (target) {
+        const tag = target.tagName;
+        if (
+          tag === "INPUT" ||
+          tag === "TEXTAREA" ||
+          (target as HTMLElement).isContentEditable
+        ) {
+          return; // Don't interfere with typing
+        }
+      }
+
+      if (selectedBlock) {
+        e.preventDefault();
+        handleDeleteSelectedBlock();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selectedBlock, blocks, tracks, currentTime]);
+
   return (
     <div className="flex h-screen bg-background text-foreground">
       <div className="border-r border-border">
