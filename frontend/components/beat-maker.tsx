@@ -39,6 +39,23 @@ const initialTracks: Track[] = [
   },
 ];
 
+// Test block for debugging audio playback
+const createTestAudioElement = () => {
+  // Create a simple test tone using Web Audio API
+  const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+  const oscillator = audioContext.createOscillator();
+  const gainNode = audioContext.createGain();
+  
+  oscillator.connect(gainNode);
+  gainNode.connect(audioContext.destination);
+  
+  oscillator.frequency.setValueAtTime(440, audioContext.currentTime); // A4 note
+  oscillator.type = 'sine';
+  gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+  
+  return { oscillator, gainNode, audioContext };
+};
+
 const initialBlocks: MusicBlock[] = [];
 
 const TIMELINE_WIDTH = 800;
@@ -67,6 +84,45 @@ export default function BeatMaker() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const trackAudioRefs = useRef<Map<string, HTMLAudioElement>>(new Map());
 
+  // Test audio function to verify audio system works
+  const testAudio = async () => {
+    try {
+      console.log("🔊 Testing audio system...");
+      
+      if (!audioContextRef.current) {
+        console.error("❌ No audio context available");
+        return;
+      }
+
+      if (audioContextRef.current.state === "suspended") {
+        await audioContextRef.current.resume();
+        console.log("✅ Audio context resumed for test");
+      }
+
+      // Create a simple test tone
+      const oscillator = audioContextRef.current.createOscillator();
+      const gainNode = audioContextRef.current.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContextRef.current.destination);
+      
+      oscillator.frequency.setValueAtTime(440, audioContextRef.current.currentTime); // A4 note
+      oscillator.type = 'sine';
+      gainNode.gain.setValueAtTime(0.1, audioContextRef.current.currentTime);
+      
+      oscillator.start();
+      
+      // Stop after 1 second
+      setTimeout(() => {
+        oscillator.stop();
+        console.log("🔊 Test tone completed");
+      }, 1000);
+      
+    } catch (error) {
+      console.error("❌ Test audio failed:", error);
+    }
+  };
+
   // Initialize Web Audio API
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -90,6 +146,8 @@ export default function BeatMaker() {
       );
       console.log("Audio refs map size:", trackAudioRefs.current.size);
       console.log("Current time:", currentTime);
+      console.log("Blocks on timeline:", blocks.length);
+      console.log("Blocks:", blocks);
 
       // Initialize audio context with user gesture
       if (audioContextRef.current?.state === "suspended") {
@@ -862,14 +920,12 @@ export default function BeatMaker() {
     setCurrentTime(time);
   };
 
-  const handleBlockMove = (
-    blockId: string,
-    newTime: number,
-    newTrackIndex: number
-  ) => {
-    setBlocks((prevBlocks) =>
-      prevBlocks.map((block) =>
-        block.id === blockId ? { ...block, startTime: newTime } : block
+  const handleBlockMove = (blockId: string, newTime: number, newTrackIndex: number) => {
+    setBlocks(prevBlocks => 
+      prevBlocks.map(block => 
+        block.id === blockId 
+          ? { ...block, startTime: newTime, track: newTrackIndex }
+          : block
       )
     );
   };
@@ -886,15 +942,16 @@ export default function BeatMaker() {
           onRecordingComplete={handleRecordingComplete}
         />
       </div>
-      <div className="flex-1 flex flex-col relative">
-        {/* Overlay should cover header + timeline area only */}
-        <AgenticBlurOverlay trigger={agenticOverlayTrigger} />
+      <div className="flex-1 flex flex-col">
         <BeatHeader
           bpm={bpm}
           isPlaying={isPlaying}
           onStart={startPlayback}
           onStop={stopPlayback}
           onReset={resetPlayback}
+          onFastForward={fastForward}
+          onRewind={rewind}
+          onExport={exportTimeline}
         />
         <BeatTimeline
           currentTime={currentTime}
