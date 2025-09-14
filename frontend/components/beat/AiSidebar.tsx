@@ -9,7 +9,7 @@ import {
   MessageCircle,
   Music,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -51,8 +51,13 @@ export default function AiSidebar({
   onSpeedAdjust,
 }: AiSidebarProps) {
   const [mode, setMode] = useState<"beat" | "agent">("beat");
-  const [musicProvider, setMusicProvider] = useState<"beatoven" | "mubert">("beatoven");
-  const [aiModel, setAiModel] = useState<"gpt-4o-mini" | "gemini-2.5-flash" | "command-a-03-2025">("gpt-4o-mini");
+  const [activeTab, setActiveTab] = useState<"chat" | "tracks">("chat");
+  const [musicProvider, setMusicProvider] = useState<"beatoven" | "mubert">(
+    "beatoven"
+  );
+  const [aiModel, setAiModel] = useState<
+    "gpt-4o-mini" | "gemini-2.5-flash" | "command-a-03-2025"
+  >("gpt-4o-mini");
   const placeholder =
     mode === "beat" ? "Describe a beat..." : "Ask the agent...";
 
@@ -124,7 +129,9 @@ export default function AiSidebar({
           blockId: string;
           speedFactor: number;
         };
-        console.log(`🏃 Speed adjusting block ${blockId} with factor ${speedFactor}`);
+        console.log(
+          `🏃 Speed adjusting block ${blockId} with factor ${speedFactor}`
+        );
 
         // Execute the speed adjustment
         handleSpeedAdjust(blockId, speedFactor, toolCall.toolCallId);
@@ -141,6 +148,14 @@ export default function AiSidebar({
 
   const isLoading = status === "streaming" || status === "submitted";
 
+  // When beat generation finishes, automatically switch to catalog tab
+  const prevIsGenerating = useRef<boolean>(false);
+  useEffect(() => {
+    if (mode === "beat" && prevIsGenerating.current && !isGeneratingTrack) {
+      setActiveTab("tracks");
+    }
+    prevIsGenerating.current = !!isGeneratingTrack;
+  }, [isGeneratingTrack, mode]);
   // Handle speed adjustment operation
   const handleSpeedAdjust = async (
     blockId: string,
@@ -148,7 +163,9 @@ export default function AiSidebar({
     toolCallId: string
   ) => {
     try {
-      console.log(`🏃 Starting speed adjustment for block ${blockId} with factor ${speedFactor}`);
+      console.log(
+        `🏃 Starting speed adjustment for block ${blockId} with factor ${speedFactor}`
+      );
 
       // Call the speed adjustment callback
       if (onSpeedAdjust) {
@@ -294,20 +311,40 @@ export default function AiSidebar({
   };
   return (
     <div className="w-80 bg-background border-l border-border flex flex-col h-full overflow-y-auto">
-  <Tabs defaultValue="chat" className="flex-1 flex flex-col">
-    <div className="sticky top-0 z-20 border-b border-border bg-background">
-    <TabsList className="grid w-full grid-cols-2 bg-background rounded-none h-12"> <TabsTrigger value="chat" className="data-[state=active]:bg-muted flex items-center gap-2" > <MessageCircle className="w-4 h-4" /> Chat </TabsTrigger> <TabsTrigger value="tracks" className="data-[state=active]:bg-muted flex items-center gap-2" > <Music className="w-4 h-4" /> Catalog </TabsTrigger> </TabsList>
-</div>
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => setActiveTab(v as any)}
+        className="flex-1 flex flex-col"
+      >
+        <div className="sticky top-0 z-20 border-b border-border bg-background">
+          <TabsList className="grid w-full grid-cols-2 bg-background rounded-none h-12">
+            {" "}
+            <TabsTrigger
+              value="chat"
+              className="flex items-center gap-2 data-[state=active]:bg-white/5 data-[state=active]:text-white"
+            >
+              {" "}
+              <MessageCircle className="w-4 h-4" /> Chat{" "}
+            </TabsTrigger>{" "}
+            <TabsTrigger
+              value="tracks"
+              className="flex items-center gap-2 data-[state=active]:bg-white/5  data-[state=active]:text-white"
+            >
+              {" "}
+              <Music className="w-4 h-4" /> Catalog{" "}
+            </TabsTrigger>{" "}
+          </TabsList>
+        </div>
 
         <TabsContent value="chat" className="flex-1 m-0 flex flex-col min-h-0">
           <div className="flex-1 p-4 space-y-4 overflow-y-auto">
-            {generationStatus && (
-              <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
-                <div className="flex items-center gap-2 text-blue-400 text-sm">
-                  {isGeneratingTrack && (
-                    <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-                  )}
-                  {generationStatus}
+            {mode === "beat" && isGeneratingTrack && (
+              <div className="rounded-lg p-3 bg-white/5 border border-white/10">
+                <div className="flex items-center gap-3 text-sm text-gray-200">
+                  <WandSparkles className="w-4 h-4 animate-spin text-yellow-300" />
+                  <span className="opacity-80">
+                    {generationStatus ? generationStatus : "Generating..."}
+                  </span>
                 </div>
               </div>
             )}
@@ -403,8 +440,9 @@ export default function AiSidebar({
                               case "input-available":
                                 return (
                                   <div key={index} className="text-yellow-400">
-                                    🏃 Adjusting speed of block "{part.input.blockId}"
-                                    to {part.input.speedFactor}x speed...
+                                    🏃 Adjusting speed of block "
+                                    {part.input.blockId}" to{" "}
+                                    {part.input.speedFactor}x speed...
                                   </div>
                                 );
                               case "output-available":
@@ -472,97 +510,111 @@ export default function AiSidebar({
                   }}
                 />
 
-              {/* Submit Footer with drop-up mode switch */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger>
-                      {mode === "beat" ? (
-                        <div className="flex items-center gap-1">
+                {/* Submit Footer with drop-up mode switch */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger>
+                        {mode === "beat" ? (
+                          <div className="flex items-center gap-1">
+                            <WandSparkles className="w-4 h-4" />
+                            <span className="text-xs">Beatmaker</span>
+                            <ChevronUp className="w-3 h-3" />
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1">
+                            <ArrowUp className="w-4 h-4" />
+                            <span className="text-xs">Agent</span>
+                            <ChevronUp className="w-3 h-3" />
+                          </div>
+                        )}
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        side="top"
+                        align="start"
+                        sideOffset={6}
+                        className="bg-[#2F2F2F] border-[#484848]"
+                      >
+                        <DropdownMenuItem onClick={() => setMode("beat")}>
                           <WandSparkles className="w-4 h-4" />
-                          <span className="text-xs">Beatmaker</span>
-                          <ChevronUp className="w-3 h-3" />
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1">
+                          <span>Beatmaker</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setMode("agent")}>
                           <ArrowUp className="w-4 h-4" />
-                          <span className="text-xs">Agent</span>
-                          <ChevronUp className="w-3 h-3" />
-                        </div>
-                      )}
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      side="top"
-                      align="start"
-                      sideOffset={6}
-                      className="bg-[#2F2F2F] border-[#484848]"
-                    >
-                      <DropdownMenuItem onClick={() => setMode("beat")}>
-                        <WandSparkles className="w-4 h-4" />
-                        <span>Beatmaker</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setMode("agent")}>
-                        <ArrowUp className="w-4 h-4" />
-                        <span>Agent</span>
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-
-                  {/* Music Provider Dropdown - only show in beatmaker mode */}
-                  {mode === "beat" && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger>
-                        <div className="flex items-center gap-1 text-xs text-gray-400">
-                          <Music className="w-3 h-3" />
-                          <span>{musicProvider === "beatoven" ? "Beatoven" : "Mubert"}</span>
-                          <ChevronUp className="w-2.5 h-2.5" />
-                        </div>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent
-                        side="top"
-                        align="center"
-                        sideOffset={6}
-                        className="bg-[#2F2F2F] border-[#484848]"
-                      >
-                        <DropdownMenuItem onClick={() => setMusicProvider("beatoven")}>
-                          <span>Beatoven</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setMusicProvider("mubert")}>
-                          <span>Mubert</span>
+                          <span>Agent</span>
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
-                  )}
 
-                  {/* AI Model Dropdown - only show in agent mode */}
-                  {mode === "agent" && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger>
-                        <div className="flex items-center gap-1 text-xs text-gray-400">
-                          <WandSparkles className="w-3 h-3" />
-                          <span>{aiModel}</span>
-                          <ChevronUp className="w-2.5 h-2.5" />
-                        </div>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent
-                        side="top"
-                        align="center"
-                        sideOffset={6}
-                        className="bg-[#2F2F2F] border-[#484848]"
-                      >
-                        <DropdownMenuItem onClick={() => setAiModel("gpt-4o-mini")}>
-                          <span>gpt-4o-mini</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setAiModel("gemini-2.5-flash")}>
-                          <span>gemini-2.5-flash</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setAiModel("command-a-03-2025")}>
-                          <span>command-a-03-2025</span>
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
-                </div>
+                    {/* Music Provider Dropdown - only show in beatmaker mode */}
+                    {mode === "beat" && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger>
+                          <div className="flex items-center gap-1 text-xs text-gray-400">
+                            <Music className="w-3 h-3" />
+                            <span>
+                              {musicProvider === "beatoven"
+                                ? "Beatoven"
+                                : "Mubert"}
+                            </span>
+                            <ChevronUp className="w-2.5 h-2.5" />
+                          </div>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                          side="top"
+                          align="center"
+                          sideOffset={6}
+                          className="bg-[#2F2F2F] border-[#484848]"
+                        >
+                          <DropdownMenuItem
+                            onClick={() => setMusicProvider("beatoven")}
+                          >
+                            <span>Beatoven</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setMusicProvider("mubert")}
+                          >
+                            <span>Mubert</span>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+
+                    {/* AI Model Dropdown - only show in agent mode */}
+                    {mode === "agent" && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger>
+                          <div className="flex items-center gap-1 text-xs text-gray-400">
+                            <WandSparkles className="w-3 h-3" />
+                            <span>{aiModel}</span>
+                            <ChevronUp className="w-2.5 h-2.5" />
+                          </div>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                          side="top"
+                          align="center"
+                          sideOffset={6}
+                          className="bg-[#2F2F2F] border-[#484848]"
+                        >
+                          <DropdownMenuItem
+                            onClick={() => setAiModel("gpt-4o-mini")}
+                          >
+                            <span>gpt-4o-mini</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setAiModel("gemini-2.5-flash")}
+                          >
+                            <span>gemini-2.5-flash</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setAiModel("command-a-03-2025")}
+                          >
+                            <span>command-a-03-2025</span>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </div>
 
                   <Button
                     type="submit"

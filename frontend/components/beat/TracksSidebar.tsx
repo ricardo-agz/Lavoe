@@ -4,7 +4,14 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Volume2, Mic, Plus, MoreHorizontal, Upload, FileAudio } from "lucide-react";
+import {
+  Volume2,
+  Mic,
+  Plus,
+  MoreHorizontal,
+  Upload,
+  FileAudio,
+} from "lucide-react";
 import { Track } from "./types";
 import { FileUpload } from "./FileUpload";
 import { AudioPlayer } from "./AudioPlayer";
@@ -28,9 +35,9 @@ export function TracksSidebar({
   onFileUpload,
   onRecordingComplete,
 }: TracksSidebarProps) {
-  const [activeView, setActiveView] = useState<"tracks" | "record" | "upload" | null>(
-    null
-  );
+  const [activeView, setActiveView] = useState<
+    "tracks" | "record" | "upload" | null
+  >(null);
 
   return (
     <div className="h-full bg-background flex flex-col">
@@ -163,7 +170,7 @@ export function TracksSidebar({
                         <div
                           className={`w-0.5 h-[18px] ${track.color} rounded-full`}
                         />
-                        {(track.audioFile || track.audioBlob) ? (
+                        {track.audioFile || track.audioBlob ? (
                           <div className="flex-1 max-w-[140px]">
                             <Waveform
                               audioFile={track.audioFile}
@@ -216,7 +223,7 @@ export function TracksSidebar({
                         className={track.muted ? "opacity-50" : ""}
                       />
                     </div>
-                    
+
                     {(track.audioFile || track.audioBlob) && (
                       <div className="px-3 mt-2">
                         <AudioPlayer
