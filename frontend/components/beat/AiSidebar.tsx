@@ -243,26 +243,11 @@ export default function AiSidebar({
     }
   };
   return (
-    <div className="w-80 bg-background border-l border-border flex flex-col h-full overflow-scroll">
-      <Tabs defaultValue="chat" className="flex-1 flex flex-col">
-        <div className="border-b border-border">
-          <TabsList className="grid w-full grid-cols-2 bg-background rounded-none h-12">
-            <TabsTrigger
-              value="chat"
-              className="data-[state=active]:bg-muted flex items-center gap-2"
-            >
-              <MessageCircle className="w-4 h-4" />
-              Chat
-            </TabsTrigger>
-            <TabsTrigger
-              value="tracks"
-              className="data-[state=active]:bg-muted flex items-center gap-2"
-            >
-              <Music className="w-4 h-4" />
-              Catalog
-            </TabsTrigger>
-          </TabsList>
-        </div>
+    <div className="w-80 bg-background border-l border-border flex flex-col h-full overflow-y-auto">
+  <Tabs defaultValue="chat" className="flex-1 flex flex-col">
+    <div className="sticky top-0 z-20 border-b border-border bg-background">
+    <TabsList className="grid w-full grid-cols-2 bg-background rounded-none h-12"> <TabsTrigger value="chat" className="data-[state=active]:bg-muted flex items-center gap-2" > <MessageCircle className="w-4 h-4" /> Chat </TabsTrigger> <TabsTrigger value="tracks" className="data-[state=active]:bg-muted flex items-center gap-2" > <Music className="w-4 h-4" /> Catalog </TabsTrigger> </TabsList>
+</div>
 
         <TabsContent value="chat" className="flex-1 m-0 flex flex-col min-h-0">
           <div className="flex-1 p-4 space-y-4 overflow-y-auto">
