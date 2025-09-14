@@ -61,6 +61,7 @@ export default function BeatMaker() {
   const [isGeneratingTrack, setIsGeneratingTrack] = useState(false);
   const [generationStatus, setGenerationStatus] = useState<string>("");
   const [agenticOverlayTrigger, setAgenticOverlayTrigger] = useState(0);
+  const [justResumed, setJustResumed] = useState(false);
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -193,6 +194,160 @@ export default function BeatMaker() {
         audioElement.currentTime = 0;
       }
     });
+    
+    console.log(`🔄 Reset to time 0`);
+  };
+
+  const fastForward = () => {
+    const skipAmount = 8; // Skip forward 8 measures
+    const newTime = Math.min(currentTime + skipAmount, TIMELINE_MEASURES - 1);
+    
+    // Stop all currently playing audio
+    trackAudioRefs.current.forEach(audioElement => {
+      audioElement.pause();
+      audioElement.currentTime = 0;
+    });
+    
+    setCurrentTime(newTime);
+    
+    // If playing, set justResumed flag to trigger audio at new position
+    if (isPlaying) {
+      setJustResumed(true);
+    }
+    
+    console.log(`⏩ Fast forward to time ${newTime}`);
+  };
+
+  const rewind = () => {
+    const skipAmount = 8; // Skip backward 8 measures
+    const newTime = Math.max(currentTime - skipAmount, 0);
+    
+    // Stop all currently playing audio
+    trackAudioRefs.current.forEach(audioElement => {
+      audioElement.pause();
+      audioElement.currentTime = 0;
+    });
+    
+    setCurrentTime(newTime);
+    
+    // If playing, set justResumed flag to trigger audio at new position
+    if (isPlaying) {
+      setJustResumed(true);
+    }
+    
+    console.log(`⏪ Rewind to time ${newTime}`);
+  };
+
+  const exportTimeline = async () => {
+    try {
+      console.log('🎵 Starting timeline export...');
+      
+      // Create an offline audio context for rendering
+      const sampleRate = 44100;
+      const timelineDurationInSeconds = (TIMELINE_MEASURES * 60 / bpm * 4); // Convert measures to seconds
+      const offlineContext = new OfflineAudioContext(2, sampleRate * timelineDurationInSeconds, sampleRate);
+      
+      const blockPositions: { buffer: AudioBuffer; startTime: number }[] = [];
+      
+      // Load all audio files and decode them
+      for (const block of blocks) {
+        const track = tracks[block.track];
+        if (track && (track.audioFile || track.audioBlob) && !track.muted) {
+          try {
+            const audioData = track.audioFile ? 
+              await track.audioFile.arrayBuffer() : 
+              await track.audioBlob!.arrayBuffer();
+            
+            const audioBuffer = await offlineContext.decodeAudioData(audioData);
+            
+            // Calculate start time in seconds
+            const startTimeInSeconds = (block.startTime * 60 / bpm * 4);
+            
+            blockPositions.push({
+              buffer: audioBuffer,
+              startTime: startTimeInSeconds
+            });
+            
+            console.log(`📁 Loaded "${block.name}" for export`);
+          } catch (error) {
+            console.error(`❌ Failed to load audio for "${block.name}":`, error);
+          }
+        }
+      }
+      
+      // Create audio sources and schedule them
+      blockPositions.forEach(({ buffer, startTime }) => {
+        const source = offlineContext.createBufferSource();
+        source.buffer = buffer;
+        source.connect(offlineContext.destination);
+        source.start(startTime);
+      });
+      
+      console.log('🎵 Rendering timeline...');
+      
+      // Render the audio
+      const renderedBuffer = await offlineContext.startRendering();
+      
+      // Convert to WAV and download
+      const wavBlob = audioBufferToWav(renderedBuffer);
+      const url = URL.createObjectURL(wavBlob);
+      
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `lavoe-timeline-${Date.now()}.wav`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      console.log('✅ Timeline exported successfully!');
+      
+    } catch (error) {
+      console.error('❌ Export failed:', error);
+      alert('Export failed. Please try again.');
+    }
+  };
+
+  // Helper function to convert AudioBuffer to WAV
+  const audioBufferToWav = (buffer: AudioBuffer): Blob => {
+    const length = buffer.length;
+    const numberOfChannels = buffer.numberOfChannels;
+    const sampleRate = buffer.sampleRate;
+    const arrayBuffer = new ArrayBuffer(44 + length * numberOfChannels * 2);
+    const view = new DataView(arrayBuffer);
+    
+    // WAV header
+    const writeString = (offset: number, string: string) => {
+      for (let i = 0; i < string.length; i++) {
+        view.setUint8(offset + i, string.charCodeAt(i));
+      }
+    };
+    
+    writeString(0, 'RIFF');
+    view.setUint32(4, 36 + length * numberOfChannels * 2, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, numberOfChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * numberOfChannels * 2, true);
+    view.setUint16(32, numberOfChannels * 2, true);
+    view.setUint16(34, 16, true);
+    writeString(36, 'data');
+    view.setUint32(40, length * numberOfChannels * 2, true);
+    
+    // Convert float samples to 16-bit PCM
+    let offset = 44;
+    for (let i = 0; i < length; i++) {
+      for (let channel = 0; channel < numberOfChannels; channel++) {
+        const sample = Math.max(-1, Math.min(1, buffer.getChannelData(channel)[i]));
+        view.setInt16(offset, sample * 0x7FFF, true);
+        offset += 2;
+      }
+    }
+    
+    return new Blob([arrayBuffer], { type: 'audio/wav' });
   };
 
   const handleBlockClick = (blockId: string) => {
