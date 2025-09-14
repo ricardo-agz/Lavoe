@@ -3,12 +3,16 @@
 import { useEffect, useRef, useState } from "react";
 
 interface AgenticBlurOverlayProps {
-  trigger: number;
+  // Optional legacy trigger: when incremented, overlay shows for durationMs
+  trigger?: number;
+  // When active is provided, it fully controls visibility with no timeout
+  active?: boolean;
   durationMs?: number;
 }
 
 export default function AgenticBlurOverlay({
   trigger,
+  active,
   durationMs = 10000,
 }: AgenticBlurOverlayProps) {
   const [showShadow, setShowShadow] = useState(false);
@@ -27,8 +31,37 @@ export default function AgenticBlurOverlay({
     "rgba(255,140,0,0.3)", // Dark Orange
   ];
 
+  // Active-controlled mode: show while active is true, no timeout
   useEffect(() => {
-    if (trigger <= 0) return;
+    if (active === undefined) return;
+
+    // Clear previous timers
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+
+    if (active) {
+      console.log("[AgenticBlurOverlay] Active ON");
+      setShowShadow(true);
+      setColorIndex(0);
+      intervalRef.current = setInterval(() => {
+        setColorIndex((prev) => (prev + 1) % colors.length);
+      }, 1250);
+    } else {
+      console.log("[AgenticBlurOverlay] Active OFF");
+      setShowShadow(false);
+      setColorIndex(0);
+    }
+
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, [active]);
+
+  // Legacy trigger-based mode: show for durationMs when trigger increments
+  useEffect(() => {
+    if (active !== undefined) return; // skip when using active mode
+    if (!trigger || trigger <= 0) return;
 
     console.log("[AgenticBlurOverlay] Triggered", { trigger, durationMs });
 
@@ -55,7 +88,7 @@ export default function AgenticBlurOverlay({
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       console.log("[AgenticBlurOverlay] Cleaned up timers");
     };
-  }, [trigger]);
+  }, [trigger, active, durationMs]);
 
   return (
     <div
@@ -66,6 +99,12 @@ export default function AgenticBlurOverlay({
         boxShadow: showShadow
           ? `inset 0 0 100px 20px ${colors[colorIndex]}`
           : "none",
+        // Add visible blur + tint so the overlay is unmistakable
+        backdropFilter: showShadow ? "blur(6px)" : "none",
+        WebkitBackdropFilter: showShadow ? "blur(6px)" : "none",
+        background: showShadow
+          ? `radial-gradient(80% 60% at 50% 40%, ${colors[colorIndex]} 0%, transparent 70%)`
+          : "transparent",
       }}
     />
   );

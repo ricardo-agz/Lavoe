@@ -60,7 +60,7 @@ export default function BeatMaker() {
   const [tracksRefreshTrigger, setTracksRefreshTrigger] = useState(0);
   const [isGeneratingTrack, setIsGeneratingTrack] = useState(false);
   const [generationStatus, setGenerationStatus] = useState<string>("");
-  const [agenticOverlayTrigger, setAgenticOverlayTrigger] = useState(0);
+  const [agentBusy, setAgentBusy] = useState(false);
   const [justResumed, setJustResumed] = useState(false);
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -365,7 +365,10 @@ export default function BeatMaker() {
     setSelectedBlock(selectedBlock === blockId ? null : blockId);
   };
 
-  const generateAIComponent = async (mode: "beat" | "agent" = "beat", provider: "beatoven" | "mubert" = "beatoven") => {
+  const generateAIComponent = async (
+    mode: "beat" | "agent" = "beat",
+    provider: "beatoven" | "mubert" = "beatoven"
+  ) => {
     if (!aiPrompt.trim()) return;
 
     if (mode === "beat") {
@@ -377,9 +380,7 @@ export default function BeatMaker() {
         await generateBeatovenTrack(aiPrompt);
       }
     } else {
-      // Handle Agent mode - trigger overlay only, no track/block creation
-      // Trigger agentic overlay across header + timeline
-      setAgenticOverlayTrigger((prev) => prev + 1);
+      // Agent mode handled via AiSidebar status; nothing to do here
     }
   };
 
@@ -516,20 +517,23 @@ export default function BeatMaker() {
       setGenerationStatus("Starting Mubert track generation...");
 
       // Start track generation
-      const response = await fetch("http://localhost:8000/start_mubert_generation", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          prompt: prompt,
-          duration: 60,
-          bitrate: 128,
-          mode: "track",
-          intensity: "medium",
-          format: "mp3",
-        }),
-      });
+      const response = await fetch(
+        "http://localhost:8000/start_mubert_generation",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            prompt: prompt,
+            duration: 60,
+            bitrate: 128,
+            mode: "track",
+            intensity: "medium",
+            format: "mp3",
+          }),
+        }
+      );
 
       if (!response.ok) {
         throw new Error("Failed to start Mubert track generation");
@@ -546,7 +550,9 @@ export default function BeatMaker() {
     } catch (error) {
       console.error("Error generating Mubert track:", error);
       setIsGeneratingTrack(false);
-      setGenerationStatus("Failed to start track generation. Please try again.");
+      setGenerationStatus(
+        "Failed to start track generation. Please try again."
+      );
       setTimeout(() => {
         setGenerationStatus("");
       }, 5000);
@@ -609,7 +615,10 @@ export default function BeatMaker() {
           }
         } else {
           // Unknown status or error
-          console.error("Unexpected Mubert track generation status:", result.status);
+          console.error(
+            "Unexpected Mubert track generation status:",
+            result.status
+          );
           setGenerationStatus(`Unexpected status: ${result.status}`);
           setIsGeneratingTrack(false);
           setTimeout(() => {
@@ -1015,12 +1024,14 @@ export default function BeatMaker() {
   };
 
   const handleSpeedAdjust = async (blockId: string, speedFactor: number) => {
-    console.log(`🏃 Speed adjusting block ${blockId} with factor ${speedFactor}`);
-    
+    console.log(
+      `🏃 Speed adjusting block ${blockId} with factor ${speedFactor}`
+    );
+
     // Use functional update to get current blocks state
     let targetBlock: any = null;
     setBlocks((prevBlocks) => {
-      targetBlock = prevBlocks.find(b => b.id === blockId);
+      targetBlock = prevBlocks.find((b) => b.id === blockId);
       console.log("Found block:", targetBlock, "in blocks:", prevBlocks);
       return prevBlocks; // No change, just getting the current state
     });
@@ -1051,25 +1062,33 @@ export default function BeatMaker() {
       console.log("🏃 Speed adjustment result:", result);
 
       // Download the new track
-      const trackResponse = await fetch(`http://localhost:8000/tracks/${result.track_id}/download`);
+      const trackResponse = await fetch(
+        `http://localhost:8000/tracks/${result.track_id}/download`
+      );
       if (!trackResponse.ok) {
-        throw new Error(`Failed to download processed track: ${trackResponse.statusText}`);
+        throw new Error(
+          `Failed to download processed track: ${trackResponse.statusText}`
+        );
       }
 
       const arrayBuffer = await trackResponse.arrayBuffer();
-      const audioBlob = new Blob([arrayBuffer], { type: 'audio/wav' });
-      const audioFile = new File([audioBlob], result.metadata.filename || 'speed_adjusted.wav', { type: 'audio/wav' });
+      const audioBlob = new Blob([arrayBuffer], { type: "audio/wav" });
+      const audioFile = new File(
+        [audioBlob],
+        result.metadata.filename || "speed_adjusted.wav",
+        { type: "audio/wav" }
+      );
 
       // Create audio element for playback
       const audioUrl = URL.createObjectURL(audioBlob);
       const audioElement = new Audio(audioUrl);
-      audioElement.preload = 'auto';
+      audioElement.preload = "auto";
 
       // Clean up old audio element if it exists
       const originalTrack = tracks[targetBlock.track];
       if (originalTrack) {
         const oldAudioElement = trackAudioRefs.current.get(originalTrack.id);
-        if (oldAudioElement && oldAudioElement.src.startsWith('blob:')) {
+        if (oldAudioElement && oldAudioElement.src.startsWith("blob:")) {
           URL.revokeObjectURL(oldAudioElement.src);
         }
       }
@@ -1077,30 +1096,31 @@ export default function BeatMaker() {
       // Store the audio element with the new track ID (from the processed audio)
       // This way the playback system can find it using block.trackId
       trackAudioRefs.current.set(result.track_id, audioElement);
-      console.log(`🔄 Stored speed-adjusted audio element with ID ${result.track_id}`);
+      console.log(
+        `🔄 Stored speed-adjusted audio element with ID ${result.track_id}`
+      );
 
       // Update the block with the new track ID and adjust duration
       audioElement.addEventListener("loadedmetadata", () => {
         const newDurationInMeasures = (audioElement.duration / 60) * (bpm / 4);
-        
+
         setBlocks((prevBlocks) =>
           prevBlocks.map((b) =>
-            b.id === blockId 
-              ? { 
-                  ...b, 
+            b.id === blockId
+              ? {
+                  ...b,
                   trackId: result.track_id,
                   audioFile: audioFile,
                   audioBlob: audioBlob,
                   duration: Math.max(1, newDurationInMeasures),
-                  name: `${b.name} (${speedFactor}x)`
-                } 
+                  name: `${b.name} (${speedFactor}x)`,
+                }
               : b
           )
         );
       });
 
       console.log(`✅ Successfully adjusted speed for block ${blockId}`);
-      
     } catch (error) {
       console.error("Speed adjustment error:", error);
       throw error;
@@ -1121,7 +1141,7 @@ export default function BeatMaker() {
       </div>
       <div className="flex-1 flex flex-col relative">
         {/* Overlay should cover header + timeline area only */}
-        <AgenticBlurOverlay trigger={agenticOverlayTrigger} />
+        <AgenticBlurOverlay active={agentBusy} />
         <BeatHeader
           bpm={bpm}
           isPlaying={isPlaying}
@@ -1159,6 +1179,8 @@ export default function BeatMaker() {
           );
         }}
         onSpeedAdjust={handleSpeedAdjust}
+        // Receive agent busy status from AiSidebar
+        onAgentBusyChange={(busy: boolean) => setAgentBusy(busy)}
         onAddChopsToEditor={async (chops: any[], originalTrackName: string) => {
           // Create tracks and blocks for each chop
           const trackColors = [

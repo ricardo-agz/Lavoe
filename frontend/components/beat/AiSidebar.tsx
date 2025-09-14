@@ -35,6 +35,7 @@ export interface AiSidebarProps {
   onBlockMove?: (blockId: string, newTime: number) => void;
   onAddChopsToEditor?: (chops: any[], originalTrackName: string) => void;
   onSpeedAdjust?: (blockId: string, speedFactor: number) => void;
+  onAgentBusyChange?: (busy: boolean) => void;
 }
 
 export default function AiSidebar({
@@ -49,6 +50,7 @@ export default function AiSidebar({
   onBlockMove,
   onAddChopsToEditor,
   onSpeedAdjust,
+  onAgentBusyChange,
 }: AiSidebarProps) {
   const [mode, setMode] = useState<"beat" | "agent">("beat");
   const [activeTab, setActiveTab] = useState<"chat" | "tracks">("chat");
@@ -147,6 +149,11 @@ export default function AiSidebar({
   });
 
   const isLoading = status === "streaming" || status === "submitted";
+
+  // Report busy state upward so overlay can follow agent lifecycle
+  useEffect(() => {
+    if (onAgentBusyChange) onAgentBusyChange(isLoading);
+  }, [isLoading, onAgentBusyChange]);
 
   // When beat generation finishes, automatically switch to catalog tab
   const prevIsGenerating = useRef<boolean>(false);
