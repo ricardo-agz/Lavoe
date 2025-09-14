@@ -78,16 +78,17 @@ export default function AiSidebar({
       }
 
       if (toolCall.toolName === 'chopAudio') {
-        const { trackId, defaultLength = 1.8, minDuration = 0.2, nClusters = 6 } = toolCall.input as {
+        const { trackId, defaultLength = 1.8, minDuration = 0.2, nClusters = 3, maxChops = 6 } = toolCall.input as {
           trackId: string,
           defaultLength?: number,
           minDuration?: number,
-          nClusters?: number
+          nClusters?: number,
+          maxChops?: number
         };
-        console.log(`🍞 Chopping audio track ${trackId}`);
+        console.log(`🍞 Chopping audio track ${trackId} (max ${maxChops} chops, ${nClusters} clusters)`);
 
         // Execute the chop audio operation
-        handleChopAudio(trackId, defaultLength, minDuration, nClusters, toolCall.toolCallId);
+        handleChopAudio(trackId, defaultLength, minDuration, nClusters, maxChops, toolCall.toolCallId);
       }
     },
     onFinish: ({ message }) => {
@@ -120,6 +121,7 @@ export default function AiSidebar({
     defaultLength: number,
     minDuration: number,
     nClusters: number,
+    maxChops: number,
     toolCallId: string
   ) => {
     try {
@@ -136,6 +138,7 @@ export default function AiSidebar({
           default_length: defaultLength,
           min_duration: minDuration,
           n_clusters: nClusters,
+          max_chops: maxChops,
         }),
       });
 
@@ -304,7 +307,7 @@ export default function AiSidebar({
                               case 'input-available':
                                 return (
                                   <div key={index} className="text-yellow-400">
-                                    🍞 Chopping track "{part.input.trackId}" (length: {part.input.defaultLength}s, clusters: {part.input.nClusters})...
+                                    🍞 Chopping track "{part.input.trackId}" (max {part.input.maxChops} chops, {part.input.nClusters} clusters, {part.input.defaultLength}s length)...
                                   </div>
                                 );
                               case 'output-available':

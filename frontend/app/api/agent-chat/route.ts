@@ -15,12 +15,13 @@ const moveBlock = tool({
 
 // Tool for chopping audio tracks (client-side only)
 const chopAudio = tool({
-  description: 'Chop an audio track into segments based on onset detection. Creates multiple new blocks from the original track. Very useful for creating drum loops or breaking down complex audio.',
+  description: 'Chop an audio track into segments based on onset detection. Creates multiple new blocks from the original track. Very useful for creating drum loops or breaking down complex audio. Automatically picks representative chops from each cluster.',
   inputSchema: z.object({
     trackId: z.string().describe('The ID of the track to chop'),
     defaultLength: z.number().min(0.1).max(10).default(1.8).describe('Default length for chops in seconds (default: 1.8)'),
     minDuration: z.number().min(0.05).max(2).default(0.2).describe('Minimum duration for chops in seconds (default: 0.2)'),
-    nClusters: z.number().min(1).max(20).default(6).describe('Number of clusters for grouping similar chops (default: 6)'),
+    nClusters: z.number().min(1).max(20).default(3).describe('Number of clusters for grouping similar chops (default: 3)'),
+    maxChops: z.number().min(1).max(50).default(6).describe('Maximum number of chops to return, picks best representatives from each cluster (default: 6)'),
   }),
   // No execute function - this is handled client-side
 });
@@ -69,7 +70,7 @@ ${blocksContext}
 - Be conversational and helpful with music arrangement advice
 - Timeline is measured in measures (beats), with each measure representing a musical unit
 - Always confirm the action you're taking when moving or chopping blocks
-- When chopping audio, explain what you're doing and why the parameters were chosen
+- When chopping audio, explain what you're doing and why the parameters were chosen (default: 6 max chops, 3 clusters)
 - For chopAudio tool, use the track ID (not track index) from the block information
 
 **Examples of what you can help with:**

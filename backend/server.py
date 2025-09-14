@@ -138,7 +138,8 @@ class ChopInput(BaseModel):
     filename: Optional[str] = Field(default="audio.wav", description="Original filename for reference")
     default_length: float = Field(default=1.8, ge=0.1, le=10.0, description="Default length for chops in seconds")
     min_duration: float = Field(default=0.2, ge=0.05, le=2.0, description="Minimum duration for chops in seconds")
-    n_clusters: int = Field(default=6, ge=1, le=20, description="Number of clusters for grouping similar chops")
+    n_clusters: int = Field(default=3, ge=1, le=20, description="Number of clusters for grouping similar chops")
+    max_chops: int = Field(default=6, ge=1, le=50, description="Maximum number of chops to return, picks best representatives from each cluster")
     
     @validator('audio_data')
     def validate_audio_data(cls, v):
@@ -189,7 +190,8 @@ class ChopProcessingRequest(BaseModel):
     track_id: str = Field(..., description="ID of the track to process")
     default_length: float = Field(default=1.8, ge=0.1, le=10.0, description="Default length for chops in seconds")
     min_duration: float = Field(default=0.2, ge=0.05, le=2.0, description="Minimum duration for chops in seconds")
-    n_clusters: int = Field(default=6, ge=1, le=20, description="Number of clusters for grouping similar chops")
+    n_clusters: int = Field(default=3, ge=1, le=20, description="Number of clusters for grouping similar chops")
+    max_chops: int = Field(default=6, ge=1, le=50, description="Maximum number of chops to return, picks best representatives from each cluster")
 
 class ChopOutputWithIds(BaseModel):
     chop_track_ids: List[str] = Field(..., description="List of track IDs for the generated chops")
@@ -945,7 +947,8 @@ async def chop_audio_by_id(request: ChopProcessingRequest):
                 "chopping_params": {
                     "default_length": request.default_length,
                     "min_duration": request.min_duration,
-                    "n_clusters": request.n_clusters
+                    "n_clusters": request.n_clusters,
+                    "max_chops": request.max_chops
                 },
                 "onset_detection": {
                     "onsets_detected": len(onset_times),
@@ -954,8 +957,66 @@ async def chop_audio_by_id(request: ChopProcessingRequest):
                 "cluster_labels": cluster_labels
             }
             
+            # Apply smart chop selection if max_chops is less than total chops
+            if len(chop_track_ids) > request.max_chops:
+                logger.info(f"Selecting {request.max_chops} best chops from {len(chop_track_ids)} total chops")
+
+                # Group chops by cluster
+                cluster_groups = {}
+                for i, label in enumerate(cluster_labels):
+                    if label not in cluster_groups:
+                        cluster_groups[label] = []
+                    cluster_groups[label].append(i)
+
+                # Calculate chops per cluster (aim to get at least one from each)
+                n_clusters_actual = len(cluster_groups)
+                base_per_cluster = max(1, request.max_chops // n_clusters_actual)
+                remaining_chops = request.max_chops - (base_per_cluster * n_clusters_actual)
+
+                selected_indices = []
+
+                # Select representative chops from each cluster
+                for cluster_id, chop_indices in cluster_groups.items():
+                    chops_for_this_cluster = base_per_cluster
+                    if remaining_chops > 0:
+                        chops_for_this_cluster += 1
+                        remaining_chops -= 1
+
+                    # Sort chops in this cluster by RMS (energy) descending
+                    cluster_chops_with_energy = []
+                    for idx in chop_indices:
+                        if idx < len(feature_matrix):
+                            rms_energy = feature_matrix[idx][0]  # RMS is first feature
+                            cluster_chops_with_energy.append((idx, rms_energy))
+
+                    # Sort by energy and take the best ones
+                    cluster_chops_with_energy.sort(key=lambda x: x[1], reverse=True)
+                    selected_from_cluster = [idx for idx, _ in cluster_chops_with_energy[:chops_for_this_cluster]]
+                    selected_indices.extend(selected_from_cluster)
+
+                # Ensure we don't exceed max_chops
+                selected_indices = selected_indices[:request.max_chops]
+
+                # Filter the results to only include selected chops
+                chop_track_ids = [chop_track_ids[i] for i in selected_indices]
+                chop_summaries = [chop_summaries[i] for i in selected_indices]
+
+                # Update cluster labels for selected chops
+                cluster_labels = [cluster_labels[i] for i in selected_indices]
+
+                # Update metadata
+                metadata["total_chops"] = len(chop_track_ids)
+                metadata["selection_info"] = {
+                    "max_chops_requested": request.max_chops,
+                    "original_chop_count": len(selected_indices),
+                    "chops_per_cluster": base_per_cluster,
+                    "clusters_used": n_clusters_actual,
+                    "selected_indices": selected_indices
+                }
+                metadata["cluster_labels"] = cluster_labels
+
             logger.info(f"Successfully processed audio chopping: {request.track_id} -> {len(chop_track_ids)} chops")
-            
+
             return ChopOutputWithIds(
                 chop_track_ids=chop_track_ids,
                 chop_summaries=chop_summaries,
