@@ -721,7 +721,7 @@ export default function BeatMaker() {
             )
           );
         }}
-        onAddChopsToEditor={(chops: any[], originalTrackName: string) => {
+        onAddChopsToEditor={async (chops: any[], originalTrackName: string) => {
           // Create tracks and blocks for each chop
           const trackColors = [
             "bg-blue-600", "bg-cyan-500", "bg-violet-600", "bg-pink-500",
@@ -733,47 +733,76 @@ export default function BeatMaker() {
           const newBlocks: MusicBlock[] = [];
           let currentTime = 0; // Start placing chops sequentially
 
-          chops.forEach((chop, index) => {
+          console.log('🍞 Creating audio elements for', chops.length, 'chops');
+
+          // Process chops sequentially to avoid overwhelming the backend
+          for (let index = 0; index < chops.length; index++) {
+            const chop = chops[index];
             const chopTrackId = `chop-track-${Date.now()}-${index}`;
             const blockId = `chop-block-${Date.now()}-${index}`;
 
-            // Create track for this chop
-            const newTrack: Track = {
-              id: chopTrackId,
-              name: `${originalTrackName} ${index + 1}`,
-              color: trackColors[index % trackColors.length],
-              muted: false,
-              volume: 75,
-              // Note: We'd need the actual audio file/blob for playback
-            };
+            try {
+              // Download the chop audio file from backend
+              console.log(`🎵 Downloading chop ${index + 1} audio (ID: ${chop.track_id})`);
+              const response = await fetch(`http://localhost:8000/tracks/${chop.track_id}/download`);
 
-            // Convert chop duration to measures (assuming 160 BPM, 4 beats per measure)
-            const durationInMeasures = Math.max(1, (chop.duration_seconds / 60) * (160 / 4));
+              if (response.ok) {
+                const audioBlob = await response.blob();
+                const audioFile = new File([audioBlob], chop.filename, { type: audioBlob.type });
 
-            // Create block for this chop
-            const newBlock: MusicBlock = {
-              id: blockId,
-              name: `Chop ${index + 1}`,
-              type: "melody",
-              color: trackColors[index % trackColors.length],
-              startTime: currentTime,
-              duration: durationInMeasures,
-              track: tracks.length + newTracks.length, // Track index
-              trackId: chop.track_id, // Use the actual chop track ID from backend
-            };
+                // Create track for this chop
+                const newTrack: Track = {
+                  id: chopTrackId,
+                  name: `${originalTrackName} ${index + 1}`,
+                  color: trackColors[index % trackColors.length],
+                  muted: false,
+                  volume: 75,
+                  audioFile: audioFile, // Store the actual audio file for playback
+                };
 
-            newTracks.push(newTrack);
-            newBlocks.push(newBlock);
+                // Create audio element for timeline playback
+                const audioElement = new Audio(URL.createObjectURL(audioBlob));
+                audioElement.loop = false;
+                audioElement.preload = 'metadata';
+                trackAudioRefs.current.set(chopTrackId, audioElement);
 
-            // Place next chop after this one
-            currentTime += durationInMeasures;
-          });
+                console.log(`✅ Created audio element for chop ${index + 1} (track: ${chopTrackId})`);
+
+                // Convert chop duration to measures (assuming 160 BPM, 4 beats per measure)
+                const durationInMeasures = Math.max(1, (chop.duration_seconds / 60) * (160 / 4));
+
+                // Create block for this chop
+                const newBlock: MusicBlock = {
+                  id: blockId,
+                  name: `Chop ${index + 1}`,
+                  type: "melody",
+                  color: trackColors[index % trackColors.length],
+                  startTime: currentTime,
+                  duration: durationInMeasures,
+                  track: tracks.length + newTracks.length, // Track index
+                  trackId: chop.track_id, // Use the actual chop track ID from backend
+                };
+
+                newTracks.push(newTrack);
+                newBlocks.push(newBlock);
+
+                // Place next chop after this one
+                currentTime += durationInMeasures;
+
+              } else {
+                console.error(`❌ Failed to download chop ${index + 1} audio:`, response.statusText);
+              }
+            } catch (error) {
+              console.error(`❌ Error processing chop ${index + 1}:`, error);
+            }
+          }
 
           // Add new tracks and blocks to the editor
           setTracks(prevTracks => [...prevTracks, ...newTracks]);
           setBlocks(prevBlocks => [...prevBlocks, ...newBlocks]);
 
           console.log(`🍞 Added ${newTracks.length} chop tracks and ${newBlocks.length} chop blocks to editor`);
+          console.log(`🎵 Audio refs map now has ${trackAudioRefs.current.size} elements`);
         }}
       />
     </div>

@@ -158,7 +158,7 @@ export default function AiSidebar({
         `Chop ${index + 1}: ${chop.duration_seconds?.toFixed(2)}s (ID: ${chop.track_id})`
       ).join(', ') || 'No chop details available';
 
-      const toolResult = `Successfully chopped track ${trackId} into ${chopCount} segments (total duration: ${totalDuration}s). Chops: ${chopSummary}`;
+      const toolResult = `Successfully chopped track ${trackId} into ${chopCount} segments (total duration: ${totalDuration}s).`;
 
       // Add the tool result
       addToolResult({
