@@ -6,6 +6,7 @@ export interface MusicBlock {
   startTime: number;
   duration: number;
   track: number;
+  trackId?: string; // ID of the associated track for AI agent use
 }
 
 export interface Track {
