@@ -147,15 +147,15 @@ export default function AiSidebar({
       console.log('🍞 Chop result:', result);
 
       // Add chops to the editor if callback is available
-      if (onAddChopsToEditor && result.chops) {
-        onAddChopsToEditor(result.chops, `Track ${trackId} chops`);
+      if (onAddChopsToEditor && result.chop_summaries) {
+        onAddChopsToEditor(result.chop_summaries, `Track ${trackId} chops`);
       }
 
       // Create summary for AI
-      const chopCount = result.chops?.length || 0;
-      const totalDuration = result.metadata?.total_duration || 'unknown';
-      const chopSummary = result.chops?.map((chop: any, index: number) =>
-        `Chop ${index + 1}: ${chop.duration?.toFixed(2)}s at ${chop.start_time?.toFixed(2)}s`
+      const chopCount = result.chop_summaries?.length || 0;
+      const totalDuration = result.metadata?.source_track_id || 'unknown';
+      const chopSummary = result.chop_summaries?.map((chop: any, index: number) =>
+        `Chop ${index + 1}: ${chop.duration_seconds?.toFixed(2)}s (ID: ${chop.track_id})`
       ).join(', ') || 'No chop details available';
 
       const toolResult = `Successfully chopped track ${trackId} into ${chopCount} segments (total duration: ${totalDuration}s). Chops: ${chopSummary}`;

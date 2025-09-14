@@ -734,12 +734,12 @@ export default function BeatMaker() {
           let currentTime = 0; // Start placing chops sequentially
 
           chops.forEach((chop, index) => {
-            const trackId = `chop-track-${Date.now()}-${index}`;
+            const chopTrackId = `chop-track-${Date.now()}-${index}`;
             const blockId = `chop-block-${Date.now()}-${index}`;
 
             // Create track for this chop
             const newTrack: Track = {
-              id: trackId,
+              id: chopTrackId,
               name: `${originalTrackName} ${index + 1}`,
               color: trackColors[index % trackColors.length],
               muted: false,
@@ -748,7 +748,7 @@ export default function BeatMaker() {
             };
 
             // Convert chop duration to measures (assuming 160 BPM, 4 beats per measure)
-            const durationInMeasures = Math.max(1, (chop.duration / 60) * (160 / 4));
+            const durationInMeasures = Math.max(1, (chop.duration_seconds / 60) * (160 / 4));
 
             // Create block for this chop
             const newBlock: MusicBlock = {
@@ -759,7 +759,7 @@ export default function BeatMaker() {
               startTime: currentTime,
               duration: durationInMeasures,
               track: tracks.length + newTracks.length, // Track index
-              trackId: trackId, // Include track ID for AI agent
+              trackId: chop.track_id, // Use the actual chop track ID from backend
             };
 
             newTracks.push(newTrack);
