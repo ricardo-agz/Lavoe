@@ -1,4 +1,6 @@
 import { openai } from '@ai-sdk/openai';
+import { google } from '@ai-sdk/google';
+import { cohere } from '@ai-sdk/cohere';
 import { streamText, tool, convertToModelMessages, UIMessage } from 'ai';
 import { z } from 'zod';
 import { NextRequest } from 'next/server';
@@ -32,7 +34,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     console.log("Request body:", JSON.stringify(body, null, 2));
 
-    const { messages, blocks } = body;
+    const { messages, blocks, model = 'gpt-4o-mini' } = body;
 
     if (!messages || !Array.isArray(messages)) {
       console.error("Invalid messages:", messages);
@@ -45,8 +47,23 @@ Current blocks in the timeline:
 ${blocks.map((block: any) => `- Block "${block.name}" (ID: ${block.id}) at time ${block.startTime} measures, duration ${block.duration} measures, track index ${block.track}${block.trackId ? `, track ID: ${block.trackId}` : ''}`).join('\n')}
 ` : 'No blocks currently in the timeline.';
 
+    // Select the appropriate model provider based on the requested model
+    let selectedModel;
+    switch (model) {
+      case 'gemini-2.5-flash':
+        selectedModel = google('models/gemini-2.0-flash-exp');
+        break;
+      case 'command-a-03-2025':
+        selectedModel = cohere('command-a-03-2025');
+        break;
+      case 'gpt-4o-mini':
+      default:
+        selectedModel = openai('gpt-4o-mini');
+        break;
+    }
+
     const result = await streamText({
-      model: openai('gpt-4o-mini'),
+      model: selectedModel,
       messages: convertToModelMessages(messages),
       tools: {
         moveBlock,
