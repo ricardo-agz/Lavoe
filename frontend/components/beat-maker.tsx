@@ -116,7 +116,9 @@ export default function BeatMaker() {
           blocks.forEach((block) => {
             const track = tracks[block.track];
             if (track && (track.audioFile || track.audioBlob) && !track.muted) {
-              const audioElement = trackAudioRefs.current.get(track.id);
+              // Use block-specific trackId if available (for processed audio), otherwise use track.id
+              const audioKey = block.trackId || track.id;
+              const audioElement = trackAudioRefs.current.get(audioKey);
               console.log(
                 "running for track",
                 track,
@@ -1010,6 +1012,99 @@ export default function BeatMaker() {
     );
   };
 
+  const handleSpeedAdjust = async (blockId: string, speedFactor: number) => {
+    console.log(`🏃 Speed adjusting block ${blockId} with factor ${speedFactor}`);
+    
+    // Use functional update to get current blocks state
+    let targetBlock: any = null;
+    setBlocks((prevBlocks) => {
+      targetBlock = prevBlocks.find(b => b.id === blockId);
+      console.log("Found block:", targetBlock, "in blocks:", prevBlocks);
+      return prevBlocks; // No change, just getting the current state
+    });
+
+    if (!targetBlock || !targetBlock.trackId) {
+      console.error(`Block ${blockId} not found or has no trackId`);
+      return;
+    }
+
+    try {
+      // Call the backend speed adjustment endpoint
+      const response = await fetch(`http://localhost:8000/process/speed`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          track_id: targetBlock.trackId,
+          speed_factor: speedFactor,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Speed adjustment failed: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      console.log("🏃 Speed adjustment result:", result);
+
+      // Download the new track
+      const trackResponse = await fetch(`http://localhost:8000/tracks/${result.track_id}/download`);
+      if (!trackResponse.ok) {
+        throw new Error(`Failed to download processed track: ${trackResponse.statusText}`);
+      }
+
+      const arrayBuffer = await trackResponse.arrayBuffer();
+      const audioBlob = new Blob([arrayBuffer], { type: 'audio/wav' });
+      const audioFile = new File([audioBlob], result.metadata.filename || 'speed_adjusted.wav', { type: 'audio/wav' });
+
+      // Create audio element for playback
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audioElement = new Audio(audioUrl);
+      audioElement.preload = 'auto';
+
+      // Clean up old audio element if it exists
+      const originalTrack = tracks[targetBlock.track];
+      if (originalTrack) {
+        const oldAudioElement = trackAudioRefs.current.get(originalTrack.id);
+        if (oldAudioElement && oldAudioElement.src.startsWith('blob:')) {
+          URL.revokeObjectURL(oldAudioElement.src);
+        }
+      }
+
+      // Store the audio element with the new track ID (from the processed audio)
+      // This way the playback system can find it using block.trackId
+      trackAudioRefs.current.set(result.track_id, audioElement);
+      console.log(`🔄 Stored speed-adjusted audio element with ID ${result.track_id}`);
+
+      // Update the block with the new track ID and adjust duration
+      audioElement.addEventListener("loadedmetadata", () => {
+        const newDurationInMeasures = (audioElement.duration / 60) * (bpm / 4);
+        
+        setBlocks((prevBlocks) =>
+          prevBlocks.map((b) =>
+            b.id === blockId 
+              ? { 
+                  ...b, 
+                  trackId: result.track_id,
+                  audioFile: audioFile,
+                  audioBlob: audioBlob,
+                  duration: Math.max(1, newDurationInMeasures),
+                  name: `${b.name} (${speedFactor}x)`
+                } 
+              : b
+          )
+        );
+      });
+
+      console.log(`✅ Successfully adjusted speed for block ${blockId}`);
+      
+    } catch (error) {
+      console.error("Speed adjustment error:", error);
+      throw error;
+    }
+  };
+
   return (
     <div className="flex h-screen bg-background text-foreground">
       <div className="border-r border-border">
@@ -1061,6 +1156,7 @@ export default function BeatMaker() {
             )
           );
         }}
+        onSpeedAdjust={handleSpeedAdjust}
         onAddChopsToEditor={async (chops: any[], originalTrackName: string) => {
           // Create tracks and blocks for each chop
           const trackColors = [
