@@ -2,6 +2,7 @@
 
 import { ReactNode } from "react";
 import { MusicBlock, Track } from "./types";
+import { Waveform } from "./Waveform";
 
 export interface BeatTimelineProps {
   currentTime: number;
@@ -247,10 +248,21 @@ export default function BeatTimeline({
                   e.preventDefault();
                 }}
               >
-                <div className="p-2 h-full flex items-center">
-                  <span className="text-xs font-medium text-white truncate">
-                    {block.name}
-                  </span>
+                <div className="p-1 h-full flex items-center justify-center overflow-hidden">
+                  {(block.audioFile || block.audioBlob) ? (
+                    <Waveform
+                      audioFile={block.audioFile}
+                      audioBlob={block.audioBlob}
+                      width={Math.max(80, Math.floor((block.duration / totalMeasures) * 800))}
+                      height={Math.max(24, Math.floor((60 / tracks.length) * 0.9))}
+                      color="rgba(255, 255, 255, 0.8)"
+                      className="w-full h-full"
+                    />
+                  ) : (
+                    <span className="text-xs font-medium text-white/80 truncate px-1">
+                      {block.name}
+                    </span>
+                  )}
                 </div>
               </div>
             ))}
