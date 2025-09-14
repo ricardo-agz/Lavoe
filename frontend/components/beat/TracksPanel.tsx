@@ -13,9 +13,10 @@ import {
   Clock,
   FileAudio,
   RefreshCw,
-  Plus
+  Plus,
 } from "lucide-react";
 import { toast } from "sonner";
+import { Waveform } from "./Waveform";
 
 interface Track {
   track_id: string;
@@ -30,12 +31,64 @@ interface Track {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+function TrackWaveform({
+  trackId,
+  colorClass,
+}: {
+  trackId: string;
+  colorClass: string;
+}) {
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+
+  useEffect(() => {
+    let isCancelled = false;
+    const load = async () => {
+      try {
+        setIsLoading(true);
+        const response = await fetch(
+          `${API_BASE_URL}/tracks/${trackId}/download`
+        );
+        if (!response.ok) throw new Error("Failed to fetch audio for waveform");
+        const blob = await response.blob();
+        if (!isCancelled) setAudioBlob(blob);
+      } catch (e) {
+        if (!isCancelled) {
+          setAudioBlob(null);
+          console.error("Waveform load error:", e);
+        }
+      } finally {
+        if (!isCancelled) setIsLoading(false);
+      }
+    };
+    load();
+    return () => {
+      isCancelled = true;
+    };
+  }, [trackId]);
+
+  return (
+    <div className="w-full">
+      <Waveform
+        audioBlob={audioBlob ?? undefined}
+        width={230}
+        height={40}
+        color={colorClass}
+        className="w-full"
+      />
+    </div>
+  );
+}
+
 interface TracksPanelProps {
   refreshTrigger?: number;
   onAddToEditor?: (trackId: string, filename: string) => void;
 }
 
-export default function TracksPanel({ refreshTrigger, onAddToEditor }: TracksPanelProps) {
+export default function TracksPanel({
+  refreshTrigger,
+  onAddToEditor,
+}: TracksPanelProps) {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [loading, setLoading] = useState(true);
   const [playingTrack, setPlayingTrack] = useState<string | null>(null);
@@ -75,7 +128,9 @@ export default function TracksPanel({ refreshTrigger, onAddToEditor }: TracksPan
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/tracks/${trackId}/download`);
+      const response = await fetch(
+        `${API_BASE_URL}/tracks/${trackId}/download`
+      );
       if (!response.ok) {
         throw new Error("Failed to download track");
       }
@@ -107,7 +162,9 @@ export default function TracksPanel({ refreshTrigger, onAddToEditor }: TracksPan
 
   const handleDownloadTrack = async (trackId: string, filename: string) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/tracks/${trackId}/download`);
+      const response = await fetch(
+        `${API_BASE_URL}/tracks/${trackId}/download`
+      );
       if (!response.ok) {
         throw new Error("Failed to download track");
       }
@@ -205,93 +262,119 @@ export default function TracksPanel({ refreshTrigger, onAddToEditor }: TracksPan
       <div className="flex-1 min-h-0 overflow-hidden">
         <ScrollArea className="h-full">
           <div className="p-4">
-        {loading ? (
-          <div className="flex items-center justify-center h-32">
-            <div className="text-center">
-              <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
-              <p className="text-sm text-muted-foreground">Loading tracks...</p>
-            </div>
-          </div>
-        ) : tracks.length === 0 ? (
-          <div className="flex items-center justify-center h-32">
-            <div className="text-center">
-              <Music2 className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">No tracks available</p>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {tracks.map((track) => (
-              <Card key={track.track_id} className="bg-card">
-                <CardHeader className="pb-2">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <CardTitle className="text-sm font-medium break-words">
-                        {track.filename}
-                      </CardTitle>
-                      <div className="text-xs text-muted-foreground mt-1 break-all">
-                        ID: {track.track_id}
+            {loading ? (
+              <div className="flex items-center justify-center h-32">
+                <div className="text-center">
+                  <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">
+                    Loading tracks...
+                  </p>
+                </div>
+              </div>
+            ) : tracks.length === 0 ? (
+              <div className="flex items-center justify-center h-32">
+                <div className="text-center">
+                  <Music2 className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">
+                    No tracks available
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {tracks.map((track) => (
+                  <Card key={track.track_id} className="bg-card">
+                    <CardHeader className="pb-2">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0 overflow-hidden">
+                          <CardTitle
+                            className="block max-w-[230px] text-sm font-medium truncate whitespace-nowrap overflow-hidden text-ellipsis"
+                            title={track.filename}
+                          >
+                            {track.filename}
+                          </CardTitle>
+                          {/* Waveform replaces ID display */}
+                          <div className="mt-3 overflow-hidden">
+                            <TrackWaveform
+                              trackId={track.track_id}
+                              colorClass={getTrackTypeColor(
+                                track.processing_type
+                              )}
+                            />
+                          </div>
+                          {track.processing_type &&
+                            getTrackTypeLabel(track.processing_type) !==
+                              "Audio" && (
+                              <div className="flex items-center gap-2 mt-1">
+                                <Badge
+                                  className={`text-xs ${getTrackTypeColor(
+                                    track.processing_type
+                                  )} text-white`}
+                                >
+                                  {getTrackTypeLabel(track.processing_type)}
+                                </Badge>
+                              </div>
+                            )}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 mt-1">
-                        <Badge
-                          className={`text-xs ${getTrackTypeColor(track.processing_type)} text-white`}
-                        >
-                          {getTrackTypeLabel(track.processing_type)}
-                        </Badge>
-                      </div>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <div className="flex items-center gap-1">
-                        <FileAudio className="w-3 h-3" />
-                        {formatFileSize(track.file_size)}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        {formatDuration(track.duration_seconds)}
-                      </div>
-                    </div>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                          <div className="flex items-center gap-1">
+                            <FileAudio className="w-3 h-3" />
+                            {formatFileSize(track.file_size)}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {formatDuration(track.duration_seconds)}
+                          </div>
+                        </div>
 
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1"
-                        onClick={() => handlePlayTrack(track.track_id)}
-                      >
-                        {playingTrack === track.track_id ? (
-                          <Pause className="w-3 h-3" />
-                        ) : (
-                          <Play className="w-3 h-3" />
-                        )}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDownloadTrack(track.track_id, track.filename)}
-                      >
-                        <Download className="w-3 h-3" />
-                      </Button>
-                      {onAddToEditor && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => onAddToEditor(track.track_id, track.filename)}
-                          title="Add to Editor"
-                        >
-                          <Plus className="w-3 h-3" />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-1"
+                            onClick={() => handlePlayTrack(track.track_id)}
+                          >
+                            {playingTrack === track.track_id ? (
+                              <Pause className="w-3 h-3" />
+                            ) : (
+                              <Play className="w-3 h-3" />
+                            )}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              handleDownloadTrack(
+                                track.track_id,
+                                track.filename
+                              )
+                            }
+                          >
+                            <Download className="w-3 h-3" />
+                          </Button>
+                          {onAddToEditor && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                onAddToEditor(track.track_id, track.filename)
+                              }
+                              title="Add to Editor"
+                            >
+                              <Plus className="w-3 h-3" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
           </div>
         </ScrollArea>
       </div>
