@@ -30,6 +30,8 @@ export default function AgenticBlurOverlay({
   useEffect(() => {
     if (trigger <= 0) return;
 
+    console.log("[AgenticBlurOverlay] Triggered", { trigger, durationMs });
+
     // Clear any previous timers
     if (intervalRef.current) clearInterval(intervalRef.current);
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -45,11 +47,13 @@ export default function AgenticBlurOverlay({
       setShowShadow(false);
       if (intervalRef.current) clearInterval(intervalRef.current);
       setColorIndex(0);
+      console.log("[AgenticBlurOverlay] Completed", { trigger });
     }, durationMs);
 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      console.log("[AgenticBlurOverlay] Cleaned up timers");
     };
   }, [trigger]);
 
