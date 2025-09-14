@@ -432,6 +432,7 @@ export default function BeatMaker() {
         startTime: 0, // Always start at beginning
         duration: 8, // Temporary duration, will be updated
         track: tracks.length, // Use the new track index
+        trackId: trackId, // Include track ID for AI agent
       };
 
       setBlocks((prev) => [...prev, newBlock]);
@@ -542,6 +543,7 @@ export default function BeatMaker() {
         startTime: 0, // Always start at beginning
         duration: 8, // Temporary duration, will be updated
         track: tracks.length, // Use the new track index
+        trackId: trackId, // Include track ID for AI agent
       };
 
       setBlocks((prev) => [...prev, newBlock]);
@@ -622,9 +624,12 @@ export default function BeatMaker() {
         startTime: 0, // Always start at beginning
         duration: 8, // Temporary duration, will be updated
         track: tracks.length, // Use the new track index
+        trackId: trackId, // Include track ID for AI agent
       };
 
       setBlocks((prev) => [...prev, newBlock]);
+
+      console.log("new block", newBlock)
 
       // Update block duration once audio metadata loads
       audioElement.addEventListener('loadedmetadata', () => {
@@ -715,6 +720,60 @@ export default function BeatMaker() {
                 : block
             )
           );
+        }}
+        onAddChopsToEditor={(chops: any[], originalTrackName: string) => {
+          // Create tracks and blocks for each chop
+          const trackColors = [
+            "bg-blue-600", "bg-cyan-500", "bg-violet-600", "bg-pink-500",
+            "bg-emerald-500", "bg-orange-500", "bg-red-500", "bg-yellow-500",
+            "bg-indigo-500", "bg-purple-500"
+          ];
+
+          const newTracks: Track[] = [];
+          const newBlocks: MusicBlock[] = [];
+          let currentTime = 0; // Start placing chops sequentially
+
+          chops.forEach((chop, index) => {
+            const trackId = `chop-track-${Date.now()}-${index}`;
+            const blockId = `chop-block-${Date.now()}-${index}`;
+
+            // Create track for this chop
+            const newTrack: Track = {
+              id: trackId,
+              name: `${originalTrackName} ${index + 1}`,
+              color: trackColors[index % trackColors.length],
+              muted: false,
+              volume: 75,
+              // Note: We'd need the actual audio file/blob for playback
+            };
+
+            // Convert chop duration to measures (assuming 160 BPM, 4 beats per measure)
+            const durationInMeasures = Math.max(1, (chop.duration / 60) * (160 / 4));
+
+            // Create block for this chop
+            const newBlock: MusicBlock = {
+              id: blockId,
+              name: `Chop ${index + 1}`,
+              type: "melody",
+              color: trackColors[index % trackColors.length],
+              startTime: currentTime,
+              duration: durationInMeasures,
+              track: tracks.length + newTracks.length, // Track index
+              trackId: trackId, // Include track ID for AI agent
+            };
+
+            newTracks.push(newTrack);
+            newBlocks.push(newBlock);
+
+            // Place next chop after this one
+            currentTime += durationInMeasures;
+          });
+
+          // Add new tracks and blocks to the editor
+          setTracks(prevTracks => [...prevTracks, ...newTracks]);
+          setBlocks(prevBlocks => [...prevBlocks, ...newBlocks]);
+
+          console.log(`🍞 Added ${newTracks.length} chop tracks and ${newBlocks.length} chop blocks to editor`);
         }}
       />
     </div>

@@ -27,6 +27,7 @@ export interface AiSidebarProps {
   onAddTrackToEditor?: (trackId: string, filename: string) => void;
   blocks?: MusicBlock[];
   onBlockMove?: (blockId: string, newTime: number) => void;
+  onAddChopsToEditor?: (chops: any[], originalTrackName: string) => void;
 }
 
 export default function AiSidebar({
@@ -39,6 +40,7 @@ export default function AiSidebar({
   onAddTrackToEditor,
   blocks = [],
   onBlockMove,
+  onAddChopsToEditor,
 }: AiSidebarProps) {
   const [mode, setMode] = useState<"beat" | "agent">("beat");
   const placeholder =
@@ -74,6 +76,19 @@ export default function AiSidebar({
           output: `Successfully moved block ${blockId} to time ${newStartTime} measures`,
         });
       }
+
+      if (toolCall.toolName === 'chopAudio') {
+        const { trackId, defaultLength = 1.8, minDuration = 0.2, nClusters = 6 } = toolCall.input as {
+          trackId: string,
+          defaultLength?: number,
+          minDuration?: number,
+          nClusters?: number
+        };
+        console.log(`🍞 Chopping audio track ${trackId}`);
+
+        // Execute the chop audio operation
+        handleChopAudio(trackId, defaultLength, minDuration, nClusters, toolCall.toolCallId);
+      }
     },
     onFinish: ({ message }) => {
       console.log('✅ Chat finished:', message);
@@ -98,6 +113,71 @@ export default function AiSidebar({
   useEffect(() => {
     console.log('💬 Messages updated:', messages);
   }, [messages]);
+
+  // Handle chop audio operation
+  const handleChopAudio = async (
+    trackId: string,
+    defaultLength: number,
+    minDuration: number,
+    nClusters: number,
+    toolCallId: string
+  ) => {
+    try {
+      console.log(`🍞 Starting chop operation for track ${trackId}`);
+
+      // Call the backend chop endpoint
+      const response = await fetch(`http://localhost:8000/process/chop-audio`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          track_id: trackId,
+          default_length: defaultLength,
+          min_duration: minDuration,
+          n_clusters: nClusters,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Chop request failed: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      console.log('🍞 Chop result:', result);
+
+      // Add chops to the editor if callback is available
+      if (onAddChopsToEditor && result.chops) {
+        onAddChopsToEditor(result.chops, `Track ${trackId} chops`);
+      }
+
+      // Create summary for AI
+      const chopCount = result.chops?.length || 0;
+      const totalDuration = result.metadata?.total_duration || 'unknown';
+      const chopSummary = result.chops?.map((chop: any, index: number) =>
+        `Chop ${index + 1}: ${chop.duration?.toFixed(2)}s at ${chop.start_time?.toFixed(2)}s`
+      ).join(', ') || 'No chop details available';
+
+      const toolResult = `Successfully chopped track ${trackId} into ${chopCount} segments (total duration: ${totalDuration}s). Chops: ${chopSummary}`;
+
+      // Add the tool result
+      addToolResult({
+        tool: 'chopAudio',
+        toolCallId: toolCallId,
+        output: toolResult,
+      });
+
+    } catch (error) {
+      console.error('❌ Error chopping audio:', error);
+
+      // Add error result
+      addToolResult({
+        tool: 'chopAudio',
+        toolCallId: toolCallId,
+        output: `Failed to chop track ${trackId}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      });
+    }
+  };
 
   // Handle form submission for different modes
   const handleFormSubmit = (e: React.FormEvent) => {
@@ -197,6 +277,34 @@ export default function AiSidebar({
                                 return (
                                   <div key={index} className="text-yellow-400">
                                     🔧 Moving block "{part.input.blockId}" to measure {part.input.newStartTime}...
+                                  </div>
+                                );
+                              case 'output-available':
+                                return (
+                                  <div key={index} className="text-green-400">
+                                    ✅ {part.output}
+                                  </div>
+                                );
+                              case 'output-error':
+                                return (
+                                  <div key={index} className="text-red-400">
+                                    ❌ Error: {part.errorText}
+                                  </div>
+                                );
+                            }
+                            break;
+                          case 'tool-chopAudio':
+                            switch (part.state) {
+                              case 'input-streaming':
+                                return (
+                                  <div key={index} className="text-yellow-400">
+                                    🍞 Preparing to chop audio...
+                                  </div>
+                                );
+                              case 'input-available':
+                                return (
+                                  <div key={index} className="text-yellow-400">
+                                    🍞 Chopping track "{part.input.trackId}" (length: {part.input.defaultLength}s, clusters: {part.input.nClusters})...
                                   </div>
                                 );
                               case 'output-available':

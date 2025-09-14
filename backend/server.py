@@ -790,6 +790,7 @@ async def chop_audio_by_id(request: ChopProcessingRequest):
         storage = get_audio_storage()
         
         # Get original audio
+        logger.info(f"Getting audio bytes for track {request.track_id}")
         audio_bytes = storage.get_audio_bytes(request.track_id)
         if audio_bytes is None:
             raise HTTPException(status_code=404, detail=f"Track {request.track_id} not found")
