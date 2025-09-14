@@ -51,7 +51,7 @@ ${blocks.map((block: any) => `- Block "${block.name}" (ID: ${block.id}) at time 
     let selectedModel;
     switch (model) {
       case 'gemini-2.5-flash':
-        selectedModel = google('models/gemini-2.0-flash-exp');
+        selectedModel = google('gemini-2.5-flash');
         break;
       case 'command-a-03-2025':
         selectedModel = cohere('command-a-03-2025');
