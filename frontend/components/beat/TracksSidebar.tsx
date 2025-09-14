@@ -9,6 +9,7 @@ import { Track } from "./types";
 import { FileUpload } from "./FileUpload";
 import { AudioPlayer } from "./AudioPlayer";
 import { RecordingComponent } from "./RecordingComponent";
+import { Waveform } from "./Waveform";
 
 interface TracksSidebarProps {
   tracks: Track[];
@@ -158,15 +159,25 @@ export function TracksSidebar({
                     className="group px-2 py-2 rounded-lg hover:bg-muted/30"
                   >
                     <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-1">
                         <div
                           className={`w-0.5 h-[18px] ${track.color} rounded-full`}
                         />
-                        <span className="text-xs font-medium text-foreground">
-                          {track.name}
-                        </span>
-                        {(track.audioFile || track.audioBlob) && (
-                          <FileAudio className="h-3 w-3 text-muted-foreground" />
+                        {(track.audioFile || track.audioBlob) ? (
+                          <div className="flex-1 max-w-[140px]">
+                            <Waveform
+                              audioFile={track.audioFile}
+                              audioBlob={track.audioBlob}
+                              width={140}
+                              height={36}
+                              color={track.color}
+                              className="opacity-80"
+                            />
+                          </div>
+                        ) : (
+                          <span className="text-xs font-medium text-muted-foreground">
+                            No audio
+                          </span>
                         )}
                       </div>
                       <div className="flex items-center">

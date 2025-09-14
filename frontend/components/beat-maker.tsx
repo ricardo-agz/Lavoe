@@ -433,6 +433,7 @@ export default function BeatMaker() {
         duration: 8, // Temporary duration, will be updated
         track: tracks.length, // Use the new track index
         trackId: trackId, // Include track ID for AI agent
+        audioFile: file, // Include audio file for waveform display
       };
 
       setBlocks((prev) => [...prev, newBlock]);
@@ -544,6 +545,7 @@ export default function BeatMaker() {
         duration: 8, // Temporary duration, will be updated
         track: tracks.length, // Use the new track index
         trackId: trackId, // Include track ID for AI agent
+        audioBlob: audioBlob, // Include audio blob for waveform display
       };
 
       setBlocks((prev) => [...prev, newBlock]);
@@ -625,6 +627,7 @@ export default function BeatMaker() {
         duration: 8, // Temporary duration, will be updated
         track: tracks.length, // Use the new track index
         trackId: trackId, // Include track ID for AI agent
+        audioFile: audioFile, // Include audio file for waveform display
       };
 
       setBlocks((prev) => [...prev, newBlock]);
@@ -781,6 +784,7 @@ export default function BeatMaker() {
                   duration: durationInMeasures,
                   track: tracks.length + newTracks.length, // Track index
                   trackId: chop.track_id, // Use the actual chop track ID from backend
+                  audioBlob: audioBlob, // Include audio blob for waveform display
                 };
 
                 newTracks.push(newTrack);
