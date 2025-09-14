@@ -52,7 +52,7 @@ export default function AiSidebar({
               className="data-[state=active]:bg-muted flex items-center gap-2"
             >
               <Music className="w-4 h-4" />
-              Tracks
+              Catalog
             </TabsTrigger>
           </TabsList>
         </div>

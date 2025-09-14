@@ -114,7 +114,7 @@ export default function BeatMaker() {
           // Check if any blocks should start playing at this time
           blocks.forEach((block) => {
             const track = tracks[block.track];
-            if (track && !track.muted) {
+            if (track && (track.audioFile || track.audioBlob) && !track.muted) {
               const audioElement = trackAudioRefs.current.get(track.id);
               console.log(
                 "running for track",
