@@ -49,8 +49,12 @@ export default function AiSidebar({
   onAddChopsToEditor,
 }: AiSidebarProps) {
   const [mode, setMode] = useState<"beat" | "agent">("beat");
-  const [musicProvider, setMusicProvider] = useState<"beatoven" | "mubert">("beatoven");
-  const [aiModel, setAiModel] = useState<"gpt-4o-mini" | "gemini-2.5-flash" | "command-a-03-2025">("gpt-4o-mini");
+  const [musicProvider, setMusicProvider] = useState<"beatoven" | "mubert">(
+    "beatoven"
+  );
+  const [aiModel, setAiModel] = useState<
+    "gpt-4o-mini" | "gemini-2.5-flash" | "command-a-03-2025"
+  >("gpt-4o-mini");
   const placeholder =
     mode === "beat" ? "Describe a beat..." : "Ask the agent...";
 
@@ -247,10 +251,26 @@ export default function AiSidebar({
   };
   return (
     <div className="w-80 bg-background border-l border-border flex flex-col h-full overflow-y-auto">
-  <Tabs defaultValue="chat" className="flex-1 flex flex-col">
-    <div className="sticky top-0 z-20 border-b border-border bg-background">
-    <TabsList className="grid w-full grid-cols-2 bg-background rounded-none h-12"> <TabsTrigger value="chat" className="data-[state=active]:bg-muted flex items-center gap-2" > <MessageCircle className="w-4 h-4" /> Chat </TabsTrigger> <TabsTrigger value="tracks" className="data-[state=active]:bg-muted flex items-center gap-2" > <Music className="w-4 h-4" /> Catalog </TabsTrigger> </TabsList>
-</div>
+      <Tabs defaultValue="chat" className="flex-1 flex flex-col">
+        <div className="sticky top-0 z-20 border-b border-border bg-background">
+          <TabsList className="grid w-full grid-cols-2 bg-background rounded-none h-12">
+            {" "}
+            <TabsTrigger
+              value="chat"
+              className="flex items-center gap-2 data-[state=active]:bg-white/5 data-[state=active]:text-white"
+            >
+              {" "}
+              <MessageCircle className="w-4 h-4" /> Chat{" "}
+            </TabsTrigger>{" "}
+            <TabsTrigger
+              value="tracks"
+              className="flex items-center gap-2 data-[state=active]:bg-white/5  data-[state=active]:text-white"
+            >
+              {" "}
+              <Music className="w-4 h-4" /> Catalog{" "}
+            </TabsTrigger>{" "}
+          </TabsList>
+        </div>
 
         <TabsContent value="chat" className="flex-1 m-0 flex flex-col min-h-0">
           <div className="flex-1 p-4 space-y-4 overflow-y-auto">
@@ -396,97 +416,111 @@ export default function AiSidebar({
                   }}
                 />
 
-              {/* Submit Footer with drop-up mode switch */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger>
-                      {mode === "beat" ? (
-                        <div className="flex items-center gap-1">
+                {/* Submit Footer with drop-up mode switch */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger>
+                        {mode === "beat" ? (
+                          <div className="flex items-center gap-1">
+                            <WandSparkles className="w-4 h-4" />
+                            <span className="text-xs">Beatmaker</span>
+                            <ChevronUp className="w-3 h-3" />
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1">
+                            <ArrowUp className="w-4 h-4" />
+                            <span className="text-xs">Agent</span>
+                            <ChevronUp className="w-3 h-3" />
+                          </div>
+                        )}
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        side="top"
+                        align="start"
+                        sideOffset={6}
+                        className="bg-[#2F2F2F] border-[#484848]"
+                      >
+                        <DropdownMenuItem onClick={() => setMode("beat")}>
                           <WandSparkles className="w-4 h-4" />
-                          <span className="text-xs">Beatmaker</span>
-                          <ChevronUp className="w-3 h-3" />
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1">
+                          <span>Beatmaker</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setMode("agent")}>
                           <ArrowUp className="w-4 h-4" />
-                          <span className="text-xs">Agent</span>
-                          <ChevronUp className="w-3 h-3" />
-                        </div>
-                      )}
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      side="top"
-                      align="start"
-                      sideOffset={6}
-                      className="bg-[#2F2F2F] border-[#484848]"
-                    >
-                      <DropdownMenuItem onClick={() => setMode("beat")}>
-                        <WandSparkles className="w-4 h-4" />
-                        <span>Beatmaker</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setMode("agent")}>
-                        <ArrowUp className="w-4 h-4" />
-                        <span>Agent</span>
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-
-                  {/* Music Provider Dropdown - only show in beatmaker mode */}
-                  {mode === "beat" && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger>
-                        <div className="flex items-center gap-1 text-xs text-gray-400">
-                          <Music className="w-3 h-3" />
-                          <span>{musicProvider === "beatoven" ? "Beatoven" : "Mubert"}</span>
-                          <ChevronUp className="w-2.5 h-2.5" />
-                        </div>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent
-                        side="top"
-                        align="center"
-                        sideOffset={6}
-                        className="bg-[#2F2F2F] border-[#484848]"
-                      >
-                        <DropdownMenuItem onClick={() => setMusicProvider("beatoven")}>
-                          <span>Beatoven</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setMusicProvider("mubert")}>
-                          <span>Mubert</span>
+                          <span>Agent</span>
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
-                  )}
 
-                  {/* AI Model Dropdown - only show in agent mode */}
-                  {mode === "agent" && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger>
-                        <div className="flex items-center gap-1 text-xs text-gray-400">
-                          <WandSparkles className="w-3 h-3" />
-                          <span>{aiModel}</span>
-                          <ChevronUp className="w-2.5 h-2.5" />
-                        </div>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent
-                        side="top"
-                        align="center"
-                        sideOffset={6}
-                        className="bg-[#2F2F2F] border-[#484848]"
-                      >
-                        <DropdownMenuItem onClick={() => setAiModel("gpt-4o-mini")}>
-                          <span>gpt-4o-mini</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setAiModel("gemini-2.5-flash")}>
-                          <span>gemini-2.5-flash</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setAiModel("command-a-03-2025")}>
-                          <span>command-a-03-2025</span>
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
-                </div>
+                    {/* Music Provider Dropdown - only show in beatmaker mode */}
+                    {mode === "beat" && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger>
+                          <div className="flex items-center gap-1 text-xs text-gray-400">
+                            <Music className="w-3 h-3" />
+                            <span>
+                              {musicProvider === "beatoven"
+                                ? "Beatoven"
+                                : "Mubert"}
+                            </span>
+                            <ChevronUp className="w-2.5 h-2.5" />
+                          </div>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                          side="top"
+                          align="center"
+                          sideOffset={6}
+                          className="bg-[#2F2F2F] border-[#484848]"
+                        >
+                          <DropdownMenuItem
+                            onClick={() => setMusicProvider("beatoven")}
+                          >
+                            <span>Beatoven</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setMusicProvider("mubert")}
+                          >
+                            <span>Mubert</span>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+
+                    {/* AI Model Dropdown - only show in agent mode */}
+                    {mode === "agent" && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger>
+                          <div className="flex items-center gap-1 text-xs text-gray-400">
+                            <WandSparkles className="w-3 h-3" />
+                            <span>{aiModel}</span>
+                            <ChevronUp className="w-2.5 h-2.5" />
+                          </div>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                          side="top"
+                          align="center"
+                          sideOffset={6}
+                          className="bg-[#2F2F2F] border-[#484848]"
+                        >
+                          <DropdownMenuItem
+                            onClick={() => setAiModel("gpt-4o-mini")}
+                          >
+                            <span>gpt-4o-mini</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setAiModel("gemini-2.5-flash")}
+                          >
+                            <span>gemini-2.5-flash</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setAiModel("command-a-03-2025")}
+                          >
+                            <span>command-a-03-2025</span>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </div>
 
                   <Button
                     type="submit"
