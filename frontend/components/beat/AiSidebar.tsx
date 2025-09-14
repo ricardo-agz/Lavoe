@@ -34,6 +34,7 @@ export interface AiSidebarProps {
   blocks?: MusicBlock[];
   onBlockMove?: (blockId: string, newTime: number) => void;
   onAddChopsToEditor?: (chops: any[], originalTrackName: string) => void;
+  onSpeedAdjust?: (blockId: string, speedFactor: number) => void;
 }
 
 export default function AiSidebar({
@@ -47,6 +48,7 @@ export default function AiSidebar({
   blocks = [],
   onBlockMove,
   onAddChopsToEditor,
+  onSpeedAdjust,
 }: AiSidebarProps) {
   const [mode, setMode] = useState<"beat" | "agent">("beat");
   const [musicProvider, setMusicProvider] = useState<"beatoven" | "mubert">("beatoven");
@@ -116,6 +118,17 @@ export default function AiSidebar({
           toolCall.toolCallId
         );
       }
+
+      if (toolCall.toolName === "adjustSpeed" && onSpeedAdjust) {
+        const { blockId, speedFactor } = toolCall.input as {
+          blockId: string;
+          speedFactor: number;
+        };
+        console.log(`🏃 Speed adjusting block ${blockId} with factor ${speedFactor}`);
+
+        // Execute the speed adjustment
+        handleSpeedAdjust(blockId, speedFactor, toolCall.toolCallId);
+      }
     },
     onFinish: ({ message }) => {
       console.log("✅ Chat finished:", message);
@@ -127,6 +140,40 @@ export default function AiSidebar({
   });
 
   const isLoading = status === "streaming" || status === "submitted";
+
+  // Handle speed adjustment operation
+  const handleSpeedAdjust = async (
+    blockId: string,
+    speedFactor: number,
+    toolCallId: string
+  ) => {
+    try {
+      console.log(`🏃 Starting speed adjustment for block ${blockId} with factor ${speedFactor}`);
+
+      // Call the speed adjustment callback
+      if (onSpeedAdjust) {
+        await onSpeedAdjust(blockId, speedFactor);
+      }
+
+      // Add success result
+      addToolResult({
+        tool: "adjustSpeed",
+        toolCallId: toolCallId,
+        output: `Successfully adjusted speed of block ${blockId} to ${speedFactor}x`,
+      });
+    } catch (error) {
+      console.error("❌ Error adjusting speed:", error);
+
+      // Add error result
+      addToolResult({
+        tool: "adjustSpeed",
+        toolCallId: toolCallId,
+        output: `Failed to adjust speed of block ${blockId}: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
+      });
+    }
+  };
 
   // Debug logging for status changes
   useEffect(() => {
@@ -231,7 +278,7 @@ export default function AiSidebar({
           },
           {
             body: {
-              blocks, // Include current blocks state with each message
+              blocks: blocks.toSorted((a, b) => a.startTime - b.startTime), // Include current blocks state with each message
               model: aiModel, // Include selected AI model
             },
           }
@@ -329,6 +376,35 @@ export default function AiSidebar({
                                     (max {part.input.maxChops} chops,{" "}
                                     {part.input.nClusters} clusters,{" "}
                                     {part.input.defaultLength}s length)...
+                                  </div>
+                                );
+                              case "output-available":
+                                return (
+                                  <div key={index} className="text-green-400">
+                                    ✅ {part.output}
+                                  </div>
+                                );
+                              case "output-error":
+                                return (
+                                  <div key={index} className="text-red-400">
+                                    ❌ Error: {part.errorText}
+                                  </div>
+                                );
+                            }
+                            break;
+                          case "tool-adjustSpeed":
+                            switch (part.state) {
+                              case "input-streaming":
+                                return (
+                                  <div key={index} className="text-yellow-400">
+                                    🏃 Preparing to adjust speed...
+                                  </div>
+                                );
+                              case "input-available":
+                                return (
+                                  <div key={index} className="text-yellow-400">
+                                    🏃 Adjusting speed of block "{part.input.blockId}"
+                                    to {part.input.speedFactor}x speed...
                                   </div>
                                 );
                               case "output-available":

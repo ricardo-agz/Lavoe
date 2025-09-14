@@ -28,6 +28,16 @@ const chopAudio = tool({
   // No execute function - this is handled client-side
 });
 
+// Tool for adjusting audio speed (client-side only)
+const adjustSpeed = tool({
+  description: 'Adjust the speed of an audio block. Makes the audio faster or slower while maintaining pitch. Creates a new track with the adjusted speed and updates the block in place.',
+  inputSchema: z.object({
+    blockId: z.string().describe('The ID of the block to speed up or slow down'),
+    speedFactor: z.number().min(0.1).max(10).describe('Speed multiplication factor (1.0 = normal, 2.0 = 2x faster, 0.5 = 2x slower)'),
+  }),
+  // No execute function - this is handled client-side
+});
+
 export async function POST(req: NextRequest) {
   console.log("POST request received")
   try {
@@ -68,6 +78,7 @@ ${blocks.map((block: any) => `- Block "${block.name}" (ID: ${block.id}) at time 
       tools: {
         moveBlock,
         chopAudio,
+        adjustSpeed,
       },
       system: `You are Lavoe Agent, an AI assistant specialized in editing and arranging music compositions. You can help users rearrange their music by moving blocks around the timeline.
 
@@ -77,23 +88,30 @@ ${blocksContext}
 **Available Tools:**
 1. **Move Block** - Move any block to a new start time position on the timeline
 2. **Chop Audio** - Chop an audio track into segments based on onset detection, automatically adding the chops to the timeline
+3. **Adjust Speed** - Speed up or slow down an audio block while maintaining pitch (creates a new track and updates the block in place)
 
 **Instructions:**
 - Help users rearrange their music composition by moving blocks
 - Use chopAudio to break down complex audio into manageable segments (use the track ID, not track index)
+- Use adjustSpeed to speed up or slow down blocks (1.0 = normal, 2.0 = 2x faster, 0.5 = 2x slower)
 - Always refer to blocks by their name and ID for clarity
 - When suggesting moves, consider musical timing and structure
 - Explain your reasoning for block placement suggestions
 - Be conversational and helpful with music arrangement advice
 - Timeline is measured in measures (beats), with each measure representing a musical unit
-- Always confirm the action you're taking when moving or chopping blocks
+- Always confirm the action you're taking when moving, chopping, or adjusting blocks
 - When chopping audio, explain what you're doing and why the parameters were chosen (default: 6 max chops, 3 clusters)
+- When adjusting speed, explain the effect (faster/slower) and why you chose that speed factor
 - For chopAudio tool, use the track ID (not track index) from the block information
+- For adjustSpeed tool, use the block ID (the tool will automatically handle finding the track)
 
 **Examples of what you can help with:**
 - "Move the drums to start at measure 8"
 - "Chop the main track into segments"
 - "Place the melody after the bass line"
+- "Speed up the bass line to make it more energetic"
+- "Slow down the drums to half speed"
+- "Make this block 2x faster"
 - "Rearrange the composition to have a better flow"
 - "Break down this audio and arrange the pieces"
 

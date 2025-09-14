@@ -15,7 +15,7 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field, validator
 from typing import Optional, List, Dict, Any
 
-from audio_processing import get_harmonic_components, get_percussive_components, add_reverb, adjust_pitch
+from audio_processing import get_harmonic_components, get_percussive_components, add_reverb, adjust_pitch, adjust_speed
 from audio_storage import get_audio_storage
 import json
 import numpy as np
@@ -216,6 +216,10 @@ class ChopProcessingRequest(BaseModel):
     min_duration: float = Field(default=0.2, ge=0.05, le=2.0, description="Minimum duration for chops in seconds")
     n_clusters: int = Field(default=3, ge=1, le=20, description="Number of clusters for grouping similar chops")
     max_chops: int = Field(default=6, ge=1, le=50, description="Maximum number of chops to return, picks best representatives from each cluster")
+
+class SpeedProcessingRequest(BaseModel):
+    track_id: str = Field(..., description="ID of the track to process")
+    speed_factor: float = Field(..., ge=0.1, le=10.0, description="Speed multiplication factor (1.0 = normal, 2.0 = 2x faster, 0.5 = 2x slower)")
 
 class ChopOutputWithIds(BaseModel):
     chop_track_ids: List[str] = Field(..., description="List of track IDs for the generated chops")
@@ -1056,6 +1060,108 @@ async def chop_audio_by_id(request: ChopProcessingRequest):
     except Exception as e:
         logger.error(f"Audio chopping error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Audio chopping error: {str(e)}")
+
+
+@app.post("/process/speed", response_model=TrackUploadResponse)
+async def process_speed_by_id(request: SpeedProcessingRequest):
+    """
+    Adjust the speed of a stored track using track ID.
+    Returns a new track ID for the processed audio - perfect for AI agents.
+    
+    Args:
+        request: SpeedProcessingRequest with track_id and speed_factor
+        
+    Returns:
+        TrackUploadResponse with new track ID and metadata
+    """
+    try:
+        storage = get_audio_storage()
+        
+        # Get original audio
+        audio_bytes = storage.get_audio_bytes(request.track_id)
+        if audio_bytes is None:
+            raise HTTPException(status_code=404, detail=f"Track {request.track_id} not found")
+        
+        # Get original metadata
+        original_metadata = storage.get_track_metadata(request.track_id)
+        original_filename = original_metadata.get('filename', 'audio.wav') if original_metadata else 'audio.wav'
+        
+        # Process audio
+        temp_file_path = None
+        try:
+            # Create temporary file
+            file_ext = '.wav'
+            if original_filename and '.' in original_filename:
+                file_ext = '.' + original_filename.split('.')[-1].lower()
+            
+            with tempfile.NamedTemporaryFile(suffix=file_ext, delete=False) as temp_file:
+                temp_file.write(audio_bytes)
+                temp_file_path = temp_file.name
+            
+            # Load with librosa
+            y, sr = librosa.load(temp_file_path, sr=None)
+            
+            # Apply speed adjustment
+            logger.info(f"Original audio: {len(y)} samples at {sr}Hz, duration: {len(y)/sr:.2f}s")
+            y_speed_adjusted = adjust_speed(y, request.speed_factor)
+            logger.info(f"Speed adjusted audio: {len(y_speed_adjusted)} samples, duration: {len(y_speed_adjusted)/sr:.2f}s, speed factor: {request.speed_factor}")
+            
+            if len(y_speed_adjusted) == 0:
+                raise ValueError("Speed processing resulted in empty audio")
+            
+            # Save processed audio to bytes
+            processed_bytes = None
+            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as processed_file:
+                sf.write(processed_file.name, y_speed_adjusted, sr)
+                processed_temp_path = processed_file.name
+            
+            with open(processed_temp_path, 'rb') as f:
+                processed_bytes = f.read()
+            
+            if os.path.exists(processed_temp_path):
+                os.unlink(processed_temp_path)
+            
+            # Create metadata for processed audio
+            processed_metadata = {
+                'duration_seconds': float(len(y_speed_adjusted) / sr),
+                'sample_rate': int(sr),
+                'channels': 1 if len(y_speed_adjusted.shape) == 1 else y_speed_adjusted.shape[0],
+                'processing_type': 'speed_adjustment',
+                'source_track_id': request.track_id,
+                'original_duration': float(len(y) / sr),
+                'speed_settings': {
+                    'speed_factor': request.speed_factor
+                }
+            }
+            
+            # Generate new filename
+            base_name = original_filename.split('.')[0] if original_filename else "audio"
+            speed_description = f"{request.speed_factor}x" if request.speed_factor != 1.0 else "normal"
+            new_filename = f"speed_{speed_description}_{base_name}.wav"
+            
+            # Store processed audio
+            new_track_id = storage.store_audio(processed_bytes, new_filename, processed_metadata)
+            
+            # Get summary for response
+            track_summary = storage.get_track_summary(new_track_id)
+            
+            logger.info(f"Successfully processed speed adjustment: {request.track_id} -> {new_track_id} (speed: {request.speed_factor}x)")
+            
+            return TrackUploadResponse(
+                track_id=new_track_id,
+                message=f"Speed adjustment completed ({request.speed_factor}x). New track: {new_track_id}",
+                metadata=TrackReference(**track_summary)
+            )
+            
+        finally:
+            if temp_file_path and os.path.exists(temp_file_path):
+                os.unlink(temp_file_path)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Speed processing error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Speed processing error: {str(e)}")
 
 
 @app.post("/start_track_generation")

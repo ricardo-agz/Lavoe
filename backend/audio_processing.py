@@ -77,3 +77,25 @@ def adjust_pitch(y, sr, semitones):
     y_shifted = librosa.effects.pitch_shift(y, sr=sr, n_steps=semitones)
     
     return y_shifted
+
+
+def adjust_speed(y, speed_factor):
+    """
+    Adjust the speed of audio data by a specified factor.
+    
+    Args:
+        y: Audio data as numpy array
+        speed_factor: Speed multiplication factor (1.0 = normal, 2.0 = 2x faster, 0.5 = 2x slower)
+    
+    Returns:
+        Audio data with speed adjusted
+    """
+    if speed_factor <= 0:
+        raise ValueError("Speed factor must be positive")
+    
+    # Use librosa's time_stretch function
+    # rate > 1.0 makes audio faster, rate < 1.0 makes audio slower
+    # speed_factor directly corresponds to the rate parameter
+    y_stretched = librosa.effects.time_stretch(y, rate=speed_factor)
+    
+    return y_stretched
