@@ -9,7 +9,7 @@ import {
   MessageCircle,
   Music,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -49,6 +49,7 @@ export default function AiSidebar({
   onAddChopsToEditor,
 }: AiSidebarProps) {
   const [mode, setMode] = useState<"beat" | "agent">("beat");
+  const [activeTab, setActiveTab] = useState<"chat" | "tracks">("chat");
   const [musicProvider, setMusicProvider] = useState<"beatoven" | "mubert">(
     "beatoven"
   );
@@ -131,6 +132,15 @@ export default function AiSidebar({
   });
 
   const isLoading = status === "streaming" || status === "submitted";
+
+  // When beat generation finishes, automatically switch to catalog tab
+  const prevIsGenerating = useRef<boolean>(false);
+  useEffect(() => {
+    if (mode === "beat" && prevIsGenerating.current && !isGeneratingTrack) {
+      setActiveTab("tracks");
+    }
+    prevIsGenerating.current = !!isGeneratingTrack;
+  }, [isGeneratingTrack, mode]);
 
   // Debug logging for status changes
   useEffect(() => {
@@ -251,7 +261,11 @@ export default function AiSidebar({
   };
   return (
     <div className="w-80 bg-background border-l border-border flex flex-col h-full overflow-y-auto">
-      <Tabs defaultValue="chat" className="flex-1 flex flex-col">
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => setActiveTab(v as any)}
+        className="flex-1 flex flex-col"
+      >
         <div className="sticky top-0 z-20 border-b border-border bg-background">
           <TabsList className="grid w-full grid-cols-2 bg-background rounded-none h-12">
             {" "}
@@ -274,13 +288,13 @@ export default function AiSidebar({
 
         <TabsContent value="chat" className="flex-1 m-0 flex flex-col min-h-0">
           <div className="flex-1 p-4 space-y-4 overflow-y-auto">
-            {generationStatus && (
-              <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
-                <div className="flex items-center gap-2 text-blue-400 text-sm">
-                  {isGeneratingTrack && (
-                    <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-                  )}
-                  {generationStatus}
+            {mode === "beat" && isGeneratingTrack && (
+              <div className="rounded-lg p-3 bg-white/5 border border-white/10">
+                <div className="flex items-center gap-3 text-sm text-gray-200">
+                  <WandSparkles className="w-4 h-4 animate-spin text-yellow-300" />
+                  <span className="opacity-80">
+                    {generationStatus ? generationStatus : "Generating..."}
+                  </span>
                 </div>
               </div>
             )}
