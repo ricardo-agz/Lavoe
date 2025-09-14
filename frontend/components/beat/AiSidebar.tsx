@@ -26,7 +26,7 @@ import { DefaultChatTransport } from "ai";
 export interface AiSidebarProps {
   aiPrompt: string;
   setAiPrompt: (v: string) => void;
-  onSubmit: (mode?: "beat" | "agent") => void;
+  onSubmit: (mode?: "beat" | "agent", provider?: "beatoven" | "mubert") => void;
   tracksRefreshTrigger?: number;
   isGeneratingTrack?: boolean;
   generationStatus?: string;
@@ -49,6 +49,8 @@ export default function AiSidebar({
   onAddChopsToEditor,
 }: AiSidebarProps) {
   const [mode, setMode] = useState<"beat" | "agent">("beat");
+  const [musicProvider, setMusicProvider] = useState<"beatoven" | "mubert">("beatoven");
+  const [aiModel, setAiModel] = useState<"gpt-4o-mini" | "gemini-2.5-flash" | "command-a-03-2025">("gpt-4o-mini");
   const placeholder =
     mode === "beat" ? "Describe a beat..." : "Ask the agent...";
 
@@ -230,6 +232,7 @@ export default function AiSidebar({
           {
             body: {
               blocks, // Include current blocks state with each message
+              model: aiModel, // Include selected AI model
             },
           }
         );
@@ -239,7 +242,7 @@ export default function AiSidebar({
       }
     } else {
       // Use existing beat generation for beatmaker mode
-      onSubmit(mode);
+      onSubmit(mode, musicProvider);
     }
   };
   return (
@@ -393,8 +396,9 @@ export default function AiSidebar({
                   }}
                 />
 
-                {/* Submit Footer with drop-up mode switch */}
-                <div className="flex items-center justify-between">
+              {/* Submit Footer with drop-up mode switch */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
                   <DropdownMenu>
                     <DropdownMenuTrigger>
                       {mode === "beat" ? (
@@ -427,6 +431,62 @@ export default function AiSidebar({
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
+
+                  {/* Music Provider Dropdown - only show in beatmaker mode */}
+                  {mode === "beat" && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger>
+                        <div className="flex items-center gap-1 text-xs text-gray-400">
+                          <Music className="w-3 h-3" />
+                          <span>{musicProvider === "beatoven" ? "Beatoven" : "Mubert"}</span>
+                          <ChevronUp className="w-2.5 h-2.5" />
+                        </div>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        side="top"
+                        align="center"
+                        sideOffset={6}
+                        className="bg-[#2F2F2F] border-[#484848]"
+                      >
+                        <DropdownMenuItem onClick={() => setMusicProvider("beatoven")}>
+                          <span>Beatoven</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setMusicProvider("mubert")}>
+                          <span>Mubert</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+
+                  {/* AI Model Dropdown - only show in agent mode */}
+                  {mode === "agent" && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger>
+                        <div className="flex items-center gap-1 text-xs text-gray-400">
+                          <WandSparkles className="w-3 h-3" />
+                          <span>{aiModel}</span>
+                          <ChevronUp className="w-2.5 h-2.5" />
+                        </div>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        side="top"
+                        align="center"
+                        sideOffset={6}
+                        className="bg-[#2F2F2F] border-[#484848]"
+                      >
+                        <DropdownMenuItem onClick={() => setAiModel("gpt-4o-mini")}>
+                          <span>gpt-4o-mini</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setAiModel("gemini-2.5-flash")}>
+                          <span>gemini-2.5-flash</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setAiModel("command-a-03-2025")}>
+                          <span>command-a-03-2025</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </div>
 
                   <Button
                     type="submit"
