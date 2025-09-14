@@ -130,11 +130,11 @@ export function Waveform({
     ctx.fillStyle = actualColor;
     ctx.strokeStyle = actualColor;
 
-    // Apple Voice Memos style - very thin bars with spacing
-    const barWidth = Math.max(0.8, width / waveformData.length);
-    const barSpacing = 0.8; // More spacing for Apple style
+    // Apple Voice Memos style - fill entire width
+    const barWidth = width / waveformData.length;
+    const barSpacing = 0.2; // Minimal spacing to fill width better
     const centerY = height / 2;
-    const actualBarWidth = Math.max(0.8, barWidth - barSpacing);
+    const actualBarWidth = Math.max(0.5, barWidth - barSpacing);
 
     // Draw center line first (like Apple Voice Memos)
     ctx.globalAlpha = 0.3;
@@ -143,7 +143,7 @@ export function Waveform({
 
     // Draw waveform bars (Apple Voice Memos style)
     waveformData.forEach((amplitude, index) => {
-      const barHeight = Math.max(2, amplitude * height * 0.98); // Taller bars, minimum 2px
+      const barHeight = Math.max(4, amplitude * height * 1.2); // Much taller bars, minimum 4px, amplified height
       const x = index * barWidth;
       const y = centerY - barHeight / 2;
 
