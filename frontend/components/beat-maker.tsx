@@ -706,6 +706,16 @@ export default function BeatMaker() {
         isGeneratingTrack={isGeneratingTrack}
         generationStatus={generationStatus}
         onAddTrackToEditor={handleAddTrackToEditor}
+        blocks={blocks}
+        onBlockMove={(blockId: string, newTime: number) => {
+          setBlocks(prevBlocks =>
+            prevBlocks.map(block =>
+              block.id === blockId
+                ? { ...block, startTime: newTime }
+                : block
+            )
+          );
+        }}
       />
     </div>
   );
