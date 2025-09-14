@@ -1215,7 +1215,9 @@ export default function BeatMaker() {
                 const audioElement = new Audio(URL.createObjectURL(audioBlob));
                 audioElement.loop = false;
                 audioElement.preload = "metadata";
+                // Store with both chopTrackId (for track reference) and chop.track_id (for block reference)
                 trackAudioRefs.current.set(chopTrackId, audioElement);
+                trackAudioRefs.current.set(chop.track_id, audioElement);
 
                 console.log(
                   `✅ Created audio element for chop ${
