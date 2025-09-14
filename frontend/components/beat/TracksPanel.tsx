@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,7 @@ import {
   FileAudio,
   RefreshCw,
   Plus,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Waveform } from "./Waveform";
@@ -92,6 +93,9 @@ export default function TracksPanel({
   const [tracks, setTracks] = useState<Track[]>([]);
   const [loading, setLoading] = useState(true);
   const [playingTrack, setPlayingTrack] = useState<string | null>(null);
+  const currentAudio = useRef<HTMLAudioElement | null>(null);
+  const currentAudioUrl = useRef<string | null>(null);
+  const currentTrackId = useRef<string | null>(null);
 
   const fetchTracks = async () => {
     try {
@@ -120,11 +124,56 @@ export default function TracksPanel({
     }
   }, [refreshTrigger]);
 
+  const stopCurrentAudio = () => {
+    try {
+      if (currentAudio.current) {
+        currentAudio.current.pause();
+        currentAudio.current.src = "";
+        currentAudio.current.onended = null;
+        currentAudio.current.onerror = null;
+        currentAudio.current = null;
+      }
+    } finally {
+      if (currentAudioUrl.current) {
+        URL.revokeObjectURL(currentAudioUrl.current);
+        currentAudioUrl.current = null;
+      }
+      currentTrackId.current = null;
+    }
+  };
+
+  const pauseCurrentAudio = () => {
+    if (currentAudio.current) {
+      currentAudio.current.pause();
+    }
+  };
+
   const handlePlayTrack = async (trackId: string) => {
-    if (playingTrack === trackId) {
-      // Stop playing
+    // Toggle: if this track is currently playing, pause it
+    if (playingTrack === trackId && currentAudio.current) {
+      pauseCurrentAudio();
       setPlayingTrack(null);
       return;
+    }
+
+    // If this track was previously loaded (paused), resume
+    if (
+      currentTrackId.current === trackId &&
+      currentAudio.current &&
+      !currentAudio.current.ended
+    ) {
+      try {
+        await currentAudio.current.play();
+        setPlayingTrack(trackId);
+        return;
+      } catch (e) {
+        console.error("Error resuming track:", e);
+      }
+    }
+
+    // Otherwise, load and play this track
+    if (currentAudio.current) {
+      stopCurrentAudio();
     }
 
     try {
@@ -138,17 +187,20 @@ export default function TracksPanel({
       const audioBlob = await response.blob();
       const audioUrl = URL.createObjectURL(audioBlob);
       const audio = new Audio(audioUrl);
+      currentAudio.current = audio;
+      currentAudioUrl.current = audioUrl;
+      currentTrackId.current = trackId;
 
       setPlayingTrack(trackId);
 
       audio.onended = () => {
+        stopCurrentAudio();
         setPlayingTrack(null);
-        URL.revokeObjectURL(audioUrl);
       };
 
       audio.onerror = () => {
+        stopCurrentAudio();
         setPlayingTrack(null);
-        URL.revokeObjectURL(audioUrl);
         toast.error("Failed to play track");
       };
 
@@ -156,9 +208,17 @@ export default function TracksPanel({
     } catch (error) {
       console.error("Error playing track:", error);
       toast.error("Failed to play track");
+      stopCurrentAudio();
       setPlayingTrack(null);
     }
   };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      stopCurrentAudio();
+    };
+  }, []);
 
   const handleDownloadTrack = async (trackId: string, filename: string) => {
     try {
@@ -183,6 +243,24 @@ export default function TracksPanel({
     } catch (error) {
       console.error("Error downloading track:", error);
       toast.error("Failed to download track");
+    }
+  };
+
+  const handleDeleteTrack = async (trackId: string) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/tracks/${trackId}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        const msg = await response.text();
+        throw new Error(msg || "Failed to delete track");
+      }
+      // Optimistically remove from UI
+      setTracks((prev) => prev.filter((t) => t.track_id !== trackId));
+      toast.success("Track removed from catalog");
+    } catch (error) {
+      console.error("Error deleting track:", error);
+      toast.error("Failed to delete track");
     }
   };
 
@@ -283,9 +361,19 @@ export default function TracksPanel({
             ) : (
               <div className="space-y-3">
                 {tracks.map((track) => (
-                  <Card key={track.track_id} className="bg-card">
+                  <Card key={track.track_id} className="bg-card relative">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 text-muted-foreground hover:text-red-400 absolute top-2 right-2 z-10"
+                      onClick={() => handleDeleteTrack(track.track_id)}
+                      title="Remove from catalog"
+                      aria-label="Remove from catalog"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
                     <CardHeader className="pb-2">
-                      <div className="flex items-start justify-between">
+                      <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0 overflow-hidden">
                           <CardTitle
                             className="block max-w-[230px] text-sm font-medium truncate whitespace-nowrap overflow-hidden text-ellipsis"
