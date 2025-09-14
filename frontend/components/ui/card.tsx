@@ -1,31 +1,17 @@
 import * as React from 'react'
-import { cn } from '@/lib/utils'
-import { X } from 'lucide-react'
 
-function Card({
-  className,
-  onDelete,
-  ...props
-}: React.ComponentProps<'div'> & { onDelete?: () => void }) {
+import { cn } from '@/lib/utils'
+
+function Card({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       data-slot="card"
       className={cn(
-        'bg-card text-card-foreground flex flex-col gap-6 rounded-xl border py-6 shadow-sm relative',
+        'bg-card text-card-foreground flex flex-col gap-6 rounded-xl border py-6 shadow-sm',
         className,
       )}
       {...props}
-    >
-      {onDelete && (
-        <button
-          onClick={onDelete}
-          className="absolute right-3 top-3 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      )}
-      {props.children}
-    </div>
+    />
   )
 }
 
