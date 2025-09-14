@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import BeatHeader from "@/components/beat/BeatHeader";
 import BeatTimeline from "@/components/beat/BeatTimeline";
 import AiSidebar from "@/components/beat/AiSidebar";
+import AgenticBlurOverlay from "@/components/beat/AgenticBlurOverlay";
 import { TracksSidebar } from "@/components/beat/TracksSidebar";
 import { MusicBlock, Track } from "@/components/beat/types";
 
@@ -52,10 +53,14 @@ export default function BeatMaker() {
   const [tracks, setTracks] = useState<Track[]>(initialTracks);
   const [selectedBlock, setSelectedBlock] = useState<string | null>(null);
   const [aiPrompt, setAiPrompt] = useState("");
-  const [insertionPoint, setInsertionPoint] = useState<{time: number, trackIndex: number} | null>(null);
+  const [insertionPoint, setInsertionPoint] = useState<{
+    time: number;
+    trackIndex: number;
+  } | null>(null);
   const [tracksRefreshTrigger, setTracksRefreshTrigger] = useState(0);
   const [isGeneratingTrack, setIsGeneratingTrack] = useState(false);
   const [generationStatus, setGenerationStatus] = useState<string>("");
+  const [agenticOverlayTrigger, setAgenticOverlayTrigger] = useState(0);
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -76,67 +81,89 @@ export default function BeatMaker() {
 
   const startPlayback = async () => {
     if (!isPlaying) {
-      console.log('🎵 Starting playback...');
-      console.log('Tracks:', tracks.length);
-      console.log('Tracks with audio:', tracks.filter(t => t.audioFile || t.audioBlob));
-      console.log('Audio refs map size:', trackAudioRefs.current.size);
-      console.log('Current time:', currentTime);
-      
+      console.log("🎵 Starting playback...");
+      console.log("Tracks:", tracks.length);
+      console.log(
+        "Tracks with audio:",
+        tracks.filter((t) => t.audioFile || t.audioBlob)
+      );
+      console.log("Audio refs map size:", trackAudioRefs.current.size);
+      console.log("Current time:", currentTime);
+
       // Initialize audio context with user gesture
-      if (audioContextRef.current?.state === 'suspended') {
+      if (audioContextRef.current?.state === "suspended") {
         try {
           await audioContextRef.current.resume();
-          console.log('✅ Audio context resumed');
+          console.log("✅ Audio context resumed");
         } catch (error) {
-          console.error('❌ Failed to resume audio context:', error);
+          console.error("❌ Failed to resume audio context:", error);
         }
       }
-      
+
       setIsPlaying(true);
-      
+
       // Audio will be triggered by blocks during timeline progression
-      console.log(`🎵 Playback started, will trigger audio based on block positions`);
-      
+      console.log(
+        `🎵 Playback started, will trigger audio based on block positions`
+      );
+
       intervalRef.current = setInterval(() => {
         setCurrentTime((prev) => {
           const newTime = prev + 0.25; // quarter beat increments
-          
+
           // Check if any blocks should start playing at this time
-          blocks.forEach(block => {
+          blocks.forEach((block) => {
             const track = tracks[block.track];
             if (track && !track.muted) {
               const audioElement = trackAudioRefs.current.get(track.id);
-              console.log("running for track", track, audioElement, trackAudioRefs.current)
-              
+              console.log(
+                "running for track",
+                track,
+                audioElement,
+                trackAudioRefs.current
+              );
+
               if (audioElement) {
                 // Check if blue line just entered this block
                 const wasBeforeBlock = prev < block.startTime;
-                const isInBlock = newTime >= block.startTime && newTime < (block.startTime + block.duration);
-                
+                const isInBlock =
+                  newTime >= block.startTime &&
+                  newTime < block.startTime + block.duration;
+
                 if (wasBeforeBlock && isInBlock) {
-                  console.log(`🎶 Blue line hit block "${block.name}" at time ${newTime}`);
+                  console.log(
+                    `🎶 Blue line hit block "${block.name}" at time ${newTime}`
+                  );
                   audioElement.currentTime = 0;
                   audioElement.volume = track.volume / 100;
-                  audioElement.play().then(() => {
-                    console.log(`✅ Playing ${block.name}`);
-                  }).catch(error => {
-                    console.error(`❌ Failed to play ${block.name}:`, error);
-                  });
+                  audioElement
+                    .play()
+                    .then(() => {
+                      console.log(`✅ Playing ${block.name}`);
+                    })
+                    .catch((error) => {
+                      console.error(`❌ Failed to play ${block.name}:`, error);
+                    });
                 }
-                
+
                 // Check if blue line just exited this block
-                const wasInBlock = prev >= block.startTime && prev < (block.startTime + block.duration);
-                const isAfterBlock = newTime >= (block.startTime + block.duration);
-                
+                const wasInBlock =
+                  prev >= block.startTime &&
+                  prev < block.startTime + block.duration;
+                const isAfterBlock =
+                  newTime >= block.startTime + block.duration;
+
                 if (wasInBlock && isAfterBlock) {
-                  console.log(`⏹️ Blue line exited block "${block.name}" at time ${newTime}`);
+                  console.log(
+                    `⏹️ Blue line exited block "${block.name}" at time ${newTime}`
+                  );
                   audioElement.pause();
                   audioElement.currentTime = 0;
                 }
               }
             }
           });
-          
+
           return newTime >= TIMELINE_MEASURES ? 0 : newTime;
         });
       }, (60 / bpm / 4) * 1000); // quarter note timing based on BPM
@@ -149,9 +176,9 @@ export default function BeatMaker() {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
-    
+
     // Pause all track audio
-    trackAudioRefs.current.forEach(audioElement => {
+    trackAudioRefs.current.forEach((audioElement) => {
       audioElement.pause();
     });
   };
@@ -159,9 +186,9 @@ export default function BeatMaker() {
   const resetPlayback = () => {
     stopPlayback();
     setCurrentTime(0);
-    
+
     // Reset all track audio to beginning
-    trackAudioRefs.current.forEach(audioElement => {
+    trackAudioRefs.current.forEach((audioElement) => {
       if (audioElement.duration && isFinite(audioElement.duration)) {
         audioElement.currentTime = 0;
       }
@@ -180,6 +207,8 @@ export default function BeatMaker() {
       await generateBeatovenTrack(aiPrompt);
     } else {
       // Handle Agent mode - simulate AI generation (existing behavior)
+      // Trigger agentic overlay across header + timeline
+      setAgenticOverlayTrigger((prev) => prev + 1);
       const newBlock: MusicBlock = {
         id: `ai-block-${Date.now()}`,
         name: aiPrompt,
@@ -201,17 +230,20 @@ export default function BeatMaker() {
       setGenerationStatus("Starting track generation...");
 
       // Start track generation
-      const response = await fetch("http://localhost:8000/start_track_generation", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          prompt: { text: prompt },
-          format: "mp3",
-          looping: false,
-        }),
-      });
+      const response = await fetch(
+        "http://localhost:8000/start_track_generation",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            prompt: { text: prompt },
+            format: "mp3",
+            looping: false,
+          }),
+        }
+      );
 
       if (!response.ok) {
         throw new Error("Failed to start track generation");
@@ -225,7 +257,6 @@ export default function BeatMaker() {
 
       // Start polling for completion
       pollForTrackCompletion(taskId, prompt);
-
     } catch (error) {
       console.error("Error generating track:", error);
       setIsGeneratingTrack(false);
@@ -233,7 +264,10 @@ export default function BeatMaker() {
     }
   };
 
-  const pollForTrackCompletion = async (taskId: string, originalPrompt: string) => {
+  const pollForTrackCompletion = async (
+    taskId: string,
+    originalPrompt: string
+  ) => {
     const maxAttempts = 60; // 10 minutes max (60 * 10 seconds)
     let attempts = 0;
 
@@ -241,7 +275,9 @@ export default function BeatMaker() {
       try {
         attempts++;
 
-        const response = await fetch(`http://localhost:8000/get_generated_track?task_id=${taskId}`);
+        const response = await fetch(
+          `http://localhost:8000/get_generated_track?task_id=${taskId}`
+        );
 
         if (!response.ok) {
           throw new Error("Failed to check track status");
@@ -252,10 +288,12 @@ export default function BeatMaker() {
         if (result.status === "composed") {
           // Track generation completed - the tracks are now stored in our system
           console.log("Track generation completed:", result);
-          setGenerationStatus("Track generation completed! Check the Tracks tab.");
+          setGenerationStatus(
+            "Track generation completed! Check the Tracks tab."
+          );
           setIsGeneratingTrack(false);
           // Trigger tracks refresh
-          setTracksRefreshTrigger(prev => prev + 1);
+          setTracksRefreshTrigger((prev) => prev + 1);
 
           // Clear status after a few seconds
           setTimeout(() => {
@@ -263,14 +301,21 @@ export default function BeatMaker() {
           }, 5000);
 
           return;
-        } else if (result.status === "running" || result.status === "composing") {
+        } else if (
+          result.status === "running" ||
+          result.status === "composing"
+        ) {
           // Still processing
-          setGenerationStatus(`Track generation in progress... (${attempts}/${maxAttempts})`);
+          setGenerationStatus(
+            `Track generation in progress... (${attempts}/${maxAttempts})`
+          );
           if (attempts < maxAttempts) {
             setTimeout(poll, 10000); // Poll every 10 seconds
           } else {
             console.error("Track generation timed out");
-            setGenerationStatus("Track generation timed out. Please try again.");
+            setGenerationStatus(
+              "Track generation timed out. Please try again."
+            );
             setIsGeneratingTrack(false);
             setTimeout(() => {
               setGenerationStatus("");
@@ -292,7 +337,9 @@ export default function BeatMaker() {
           setTimeout(poll, 10000); // Retry after 10 seconds
         } else {
           setIsGeneratingTrack(false);
-          setGenerationStatus("Failed to check track status. Please try again.");
+          setGenerationStatus(
+            "Failed to check track status. Please try again."
+          );
           setTimeout(() => {
             setGenerationStatus("");
           }, 5000);
@@ -331,7 +378,7 @@ export default function BeatMaker() {
   const addTrack = () => {
     const trackColors = [
       "bg-blue-600",
-      "bg-cyan-500", 
+      "bg-cyan-500",
       "bg-violet-600",
       "bg-pink-500",
       "bg-emerald-500",
@@ -339,12 +386,12 @@ export default function BeatMaker() {
       "bg-red-500",
       "bg-yellow-500",
       "bg-indigo-500",
-      "bg-purple-500"
+      "bg-purple-500",
     ];
-    
+
     const trackNames = [
       "Melody",
-      "Bass", 
+      "Bass",
       "Drums",
       "Percussion",
       "Lead",
@@ -352,9 +399,9 @@ export default function BeatMaker() {
       "Arp",
       "FX",
       "Vocals",
-      "Strings"
+      "Strings",
     ];
-    
+
     const newTrack: Track = {
       id: `track-${Date.now()}`,
       name: trackNames[tracks.length % trackNames.length],
@@ -362,7 +409,7 @@ export default function BeatMaker() {
       muted: false,
       volume: 75,
     };
-    
+
     setTracks((prev) => [...prev, newTrack]);
   };
 
@@ -370,10 +417,10 @@ export default function BeatMaker() {
     try {
       // First, upload the file to the backend storage system
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append("file", file);
 
-      const response = await fetch('http://localhost:8000/upload-audio', {
-        method: 'POST',
+      const response = await fetch("http://localhost:8000/upload-audio", {
+        method: "POST",
         body: formData,
       });
 
@@ -382,10 +429,10 @@ export default function BeatMaker() {
       }
 
       const result = await response.json();
-      console.log('File uploaded to storage:', result);
+      console.log("File uploaded to storage:", result);
 
       // Trigger tracks list refresh to show the uploaded file
-      setTracksRefreshTrigger(prev => prev + 1);
+      setTracksRefreshTrigger((prev) => prev + 1);
 
       // Also create local track and block for the timeline editor
       const trackColors = [
@@ -398,11 +445,11 @@ export default function BeatMaker() {
         "bg-red-500",
         "bg-yellow-500",
         "bg-indigo-500",
-        "bg-purple-500"
+        "bg-purple-500",
       ];
 
       // Extract filename without extension for track name
-      const fileName = file.name.split('.')[0];
+      const fileName = file.name.split(".")[0];
       const trackId = `track-${Date.now()}`;
 
       const newTrack: Track = {
@@ -419,7 +466,7 @@ export default function BeatMaker() {
       // Create audio element for timeline playback
       const audioElement = new Audio(URL.createObjectURL(file));
       audioElement.loop = false;
-      audioElement.preload = 'metadata';
+      audioElement.preload = "metadata";
       trackAudioRefs.current.set(trackId, audioElement);
 
       // Create a music block at the start of the timeline (time 0)
@@ -437,19 +484,19 @@ export default function BeatMaker() {
       setBlocks((prev) => [...prev, newBlock]);
 
       // Update block duration once audio metadata loads
-      audioElement.addEventListener('loadedmetadata', () => {
-        const audioDurationInMeasures = (audioElement.duration / 60) * (160 / 4); // Convert to measures based on BPM
-        setBlocks(prevBlocks =>
-          prevBlocks.map(block =>
+      audioElement.addEventListener("loadedmetadata", () => {
+        const audioDurationInMeasures =
+          (audioElement.duration / 60) * (160 / 4); // Convert to measures based on BPM
+        setBlocks((prevBlocks) =>
+          prevBlocks.map((block) =>
             block.id === newBlock.id
               ? { ...block, duration: Math.max(1, audioDurationInMeasures) }
               : block
           )
         );
       });
-
     } catch (error) {
-      console.error('Error uploading file:', error);
+      console.error("Error uploading file:", error);
       // Could add toast notification here for better UX
     }
   };
@@ -459,10 +506,10 @@ export default function BeatMaker() {
       // First, upload the recording to the backend storage system
       const trackName = `Recording ${tracks.length + 1}`;
       const formData = new FormData();
-      formData.append('file', audioBlob, `${trackName}.wav`);
+      formData.append("file", audioBlob, `${trackName}.wav`);
 
-      const response = await fetch('http://localhost:8000/upload-audio', {
-        method: 'POST',
+      const response = await fetch("http://localhost:8000/upload-audio", {
+        method: "POST",
         body: formData,
       });
 
@@ -471,10 +518,10 @@ export default function BeatMaker() {
       }
 
       const result = await response.json();
-      console.log('Recording uploaded to storage:', result);
+      console.log("Recording uploaded to storage:", result);
 
       // Trigger tracks list refresh to show the uploaded recording
-      setTracksRefreshTrigger(prev => prev + 1);
+      setTracksRefreshTrigger((prev) => prev + 1);
 
       // Also create local track and block for the timeline editor
       const trackColors = [
@@ -487,7 +534,7 @@ export default function BeatMaker() {
         "bg-red-500",
         "bg-yellow-500",
         "bg-indigo-500",
-        "bg-purple-500"
+        "bg-purple-500",
       ];
 
       const trackColor = trackColors[tracks.length % trackColors.length];
@@ -507,29 +554,29 @@ export default function BeatMaker() {
       // Create audio element for timeline playback
       const audioElement = new Audio(URL.createObjectURL(audioBlob));
       audioElement.loop = false;
-      audioElement.preload = 'metadata';
+      audioElement.preload = "metadata";
 
       // Add comprehensive event listeners for debugging
-      audioElement.addEventListener('loadedmetadata', () => {
+      audioElement.addEventListener("loadedmetadata", () => {
         console.log(`📊 Audio metadata loaded for ${trackName}:`, {
           duration: audioElement.duration,
-          readyState: audioElement.readyState
+          readyState: audioElement.readyState,
         });
       });
 
-      audioElement.addEventListener('canplay', () => {
+      audioElement.addEventListener("canplay", () => {
         console.log(`▶️ Audio can play: ${trackName}`);
       });
 
-      audioElement.addEventListener('error', (e) => {
+      audioElement.addEventListener("error", (e) => {
         console.error(`❌ Audio error for ${trackName}:`, e);
       });
 
       trackAudioRefs.current.set(trackId, audioElement);
       console.log(`🎤 Created audio element for ${trackName}:`, {
         trackId,
-        src: audioElement.src.substring(0, 50) + '...',
-        preload: audioElement.preload
+        src: audioElement.src.substring(0, 50) + "...",
+        preload: audioElement.preload,
       });
 
       // Create a music block at the start of the timeline (time 0)
@@ -547,19 +594,19 @@ export default function BeatMaker() {
       setBlocks((prev) => [...prev, newBlock]);
 
       // Update block duration once audio metadata loads
-      audioElement.addEventListener('loadedmetadata', () => {
-        const audioDurationInMeasures = (audioElement.duration / 60) * (bpm / 4); // Convert to measures based on BPM
-        setBlocks(prevBlocks =>
-          prevBlocks.map(block =>
+      audioElement.addEventListener("loadedmetadata", () => {
+        const audioDurationInMeasures =
+          (audioElement.duration / 60) * (bpm / 4); // Convert to measures based on BPM
+        setBlocks((prevBlocks) =>
+          prevBlocks.map((block) =>
             block.id === newBlock.id
               ? { ...block, duration: Math.max(1, audioDurationInMeasures) }
               : block
           )
         );
       });
-
     } catch (error) {
-      console.error('Error uploading recording:', error);
+      console.error("Error uploading recording:", error);
       // Could add toast notification here for better UX
     }
   };
@@ -567,13 +614,17 @@ export default function BeatMaker() {
   const handleAddTrackToEditor = async (trackId: string, filename: string) => {
     try {
       // Download the track from the backend
-      const response = await fetch(`http://localhost:8000/tracks/${trackId}/download`);
+      const response = await fetch(
+        `http://localhost:8000/tracks/${trackId}/download`
+      );
       if (!response.ok) {
         throw new Error("Failed to download track");
       }
 
       const audioBlob = await response.blob();
-      const audioFile = new File([audioBlob], filename, { type: audioBlob.type });
+      const audioFile = new File([audioBlob], filename, {
+        type: audioBlob.type,
+      });
 
       // Create a track from the downloaded file
       const trackColors = [
@@ -586,11 +637,11 @@ export default function BeatMaker() {
         "bg-red-500",
         "bg-yellow-500",
         "bg-indigo-500",
-        "bg-purple-500"
+        "bg-purple-500",
       ];
 
       // Extract filename without extension for track name
-      const fileName = filename.split('.')[0];
+      const fileName = filename.split(".")[0];
       const localTrackId = `track-${Date.now()}`;
 
       const newTrack: Track = {
@@ -602,14 +653,14 @@ export default function BeatMaker() {
         audioFile: audioFile, // Store the file reference for local playback
       };
 
-      console.log("created new track on editor", newTrack)
+      console.log("created new track on editor", newTrack);
 
       setTracks((prev) => [...prev, newTrack]);
 
       // Create audio element for timeline playback
       const audioElement = new Audio(URL.createObjectURL(audioFile));
       audioElement.loop = false;
-      audioElement.preload = 'metadata';
+      audioElement.preload = "metadata";
       trackAudioRefs.current.set(localTrackId, audioElement);
 
       // Create a music block at the start of the timeline (time 0)
@@ -627,10 +678,11 @@ export default function BeatMaker() {
       setBlocks((prev) => [...prev, newBlock]);
 
       // Update block duration once audio metadata loads
-      audioElement.addEventListener('loadedmetadata', () => {
-        const audioDurationInMeasures = (audioElement.duration / 60) * (bpm / 4); // Convert to measures based on BPM
-        setBlocks(prevBlocks =>
-          prevBlocks.map(block =>
+      audioElement.addEventListener("loadedmetadata", () => {
+        const audioDurationInMeasures =
+          (audioElement.duration / 60) * (bpm / 4); // Convert to measures based on BPM
+        setBlocks((prevBlocks) =>
+          prevBlocks.map((block) =>
             block.id === newBlock.id
               ? { ...block, duration: Math.max(1, audioDurationInMeasures) }
               : block
@@ -639,9 +691,8 @@ export default function BeatMaker() {
       });
 
       console.log(`Added track "${filename}" to editor`);
-
     } catch (error) {
-      console.error('Error adding track to editor:', error);
+      console.error("Error adding track to editor:", error);
       // Could add toast notification here for better UX
     }
   };
@@ -655,12 +706,14 @@ export default function BeatMaker() {
     setCurrentTime(time);
   };
 
-  const handleBlockMove = (blockId: string, newTime: number, newTrackIndex: number) => {
-    setBlocks(prevBlocks => 
-      prevBlocks.map(block => 
-        block.id === blockId 
-          ? { ...block, startTime: newTime }
-          : block
+  const handleBlockMove = (
+    blockId: string,
+    newTime: number,
+    newTrackIndex: number
+  ) => {
+    setBlocks((prevBlocks) =>
+      prevBlocks.map((block) =>
+        block.id === blockId ? { ...block, startTime: newTime } : block
       )
     );
   };
@@ -677,7 +730,9 @@ export default function BeatMaker() {
           onRecordingComplete={handleRecordingComplete}
         />
       </div>
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col relative">
+        {/* Overlay should cover header + timeline area only */}
+        <AgenticBlurOverlay trigger={agenticOverlayTrigger} />
         <BeatHeader
           bpm={bpm}
           isPlaying={isPlaying}
