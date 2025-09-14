@@ -51,9 +51,6 @@ export default function AiSidebar({
   const { messages, sendMessage, status, error, addToolResult } = useChat({
     transport: new DefaultChatTransport({
       api: '/api/agent-chat',
-      body: {
-        blocks // Send current blocks state to AI
-      },
     }),
     onToolCall: ({ toolCall }) => {
       console.log('🔧 Tool call received:', toolCall);
@@ -112,9 +109,16 @@ export default function AiSidebar({
         console.log('📊 Current blocks state:', blocks);
         console.log('🎯 Chat status before send:', status);
 
-        sendMessage({
-          text: agentInput
-        });
+        sendMessage(
+          {
+            text: agentInput
+          },
+          {
+            body: {
+              blocks // Include current blocks state with each message
+            }
+          }
+        );
         setAgentInput(""); // Clear input after sending
       }
     } else {

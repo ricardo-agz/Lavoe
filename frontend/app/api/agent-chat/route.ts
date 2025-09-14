@@ -3,26 +3,14 @@ import { streamText, tool, convertToModelMessages, UIMessage } from 'ai';
 import { z } from 'zod';
 import { NextRequest } from 'next/server';
 
-// Tool for moving blocks in the music editor
+// Tool for moving blocks in the music editor (client-side only)
 const moveBlock = tool({
   description: 'Move a music block to a new start time in the timeline. Useful for rearranging the composition.',
   inputSchema: z.object({
     blockId: z.string().describe('The ID of the block to move'),
     newStartTime: z.number().min(0).describe('The new start time position in measures (0-based)'),
   }),
-  execute: async (params: { blockId: string; newStartTime: number }) => {
-    console.log("executing")
-    const { blockId, newStartTime } = params;
-
-    // Return instruction for frontend to handle
-    return {
-      success: true,
-      action: 'move_block',
-      blockId,
-      newStartTime,
-      message: `Moving block ${blockId} to start time ${newStartTime} measures`,
-    };
-  },
+  // No execute function - this is handled client-side
 });
 
 export async function POST(req: NextRequest) {
