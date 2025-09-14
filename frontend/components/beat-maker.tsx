@@ -206,20 +206,9 @@ export default function BeatMaker() {
       // Handle Beatmaker mode - generate actual tracks
       await generateBeatovenTrack(aiPrompt);
     } else {
-      // Handle Agent mode - simulate AI generation (existing behavior)
+      // Handle Agent mode - trigger overlay only, no track/block creation
       // Trigger agentic overlay across header + timeline
       setAgenticOverlayTrigger((prev) => prev + 1);
-      const newBlock: MusicBlock = {
-        id: `ai-block-${Date.now()}`,
-        name: aiPrompt,
-        type: "melody",
-        color: "bg-emerald-500",
-        startTime: Math.floor(Math.random() * 48),
-        duration: 8 + Math.floor(Math.random() * 16),
-        track: Math.floor(Math.random() * tracks.length),
-      };
-
-      setBlocks((prev) => [...prev, newBlock]);
       setAiPrompt("");
     }
   };
