@@ -951,7 +951,9 @@ export default function BeatMaker() {
       const audioElement = new Audio(URL.createObjectURL(audioFile));
       audioElement.loop = false;
       audioElement.preload = "metadata";
+      // Store with both localTrackId (for track reference) and trackId (for block reference)
       trackAudioRefs.current.set(localTrackId, audioElement);
+      trackAudioRefs.current.set(trackId, audioElement);
 
       // Create a music block at the start of the timeline (time 0)
       // Duration will be set once audio metadata loads
@@ -963,7 +965,7 @@ export default function BeatMaker() {
         startTime: 0, // Always start at beginning
         duration: 8, // Temporary duration, will be updated
         track: tracks.length, // Use the new track index
-        trackId: trackId, // Include track ID for AI agent
+        trackId: trackId, // Include backend track ID for AI agent
         audioFile: audioFile, // Include audio file for waveform display
       };
 
