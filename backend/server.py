@@ -32,6 +32,8 @@ load_dotenv()
 
 # Configuration
 BEATOVEN_API_KEY = os.getenv("BEATOVEN_API_KEY")
+MUBERT_CUSTOMER_ID = os.getenv("MUBERT_CUSTOMER_ID")
+MUBERT_ACCESS_TOKEN = os.getenv("MUBERT_ACCESS_TOKEN")
 
 def get_beatoven_headers():
     """Get authorization headers for Beatoven AI API."""
@@ -41,6 +43,19 @@ def get_beatoven_headers():
             detail="BEATOVEN_API_KEY environment variable is not set"
         )
     return {"Authorization": f"Bearer {BEATOVEN_API_KEY}"}
+
+def get_mubert_headers():
+    """Get authorization headers for Mubert API."""
+    if not MUBERT_CUSTOMER_ID or not MUBERT_ACCESS_TOKEN:
+        raise HTTPException(
+            status_code=500,
+            detail="MUBERT_CUSTOMER_ID and MUBERT_ACCESS_TOKEN environment variables are not set"
+        )
+    return {
+        "customer-id": MUBERT_CUSTOMER_ID,
+        "access-token": MUBERT_ACCESS_TOKEN,
+        "Content-Type": "application/json"
+    }
 
 # Pydantic models for Beatoven AI API
 class PromptModel(BaseModel):
@@ -57,6 +72,15 @@ class TrackGenerationResponse(BaseModel):
 
 class TrackStatusRequest(BaseModel):
     task_id: str
+
+# Pydantic models for Mubert API
+class MubertGenerationRequest(BaseModel):
+    prompt: str
+    duration: Optional[int] = 60
+    bitrate: Optional[int] = 128
+    mode: Optional[str] = "track"
+    intensity: Optional[str] = "medium"
+    format: Optional[str] = "mp3"
 
 # Background task for cleanup
 cleanup_task = None
@@ -1207,6 +1231,177 @@ async def get_generated_track(task_id: str):
         ) from e
     except Exception as e:
         logger.error(f"Error in get_generated_track: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected error: {str(e)}"
+        ) from e
+
+
+@app.post("/start_mubert_generation")
+async def start_mubert_generation(request: MubertGenerationRequest):
+    """
+    Start music track generation using the Mubert API.
+    Returns a track ID to poll for completion status.
+
+    Args:
+        request: Mubert generation parameters including prompt, duration, etc.
+
+    Returns:
+        Response with track ID for status polling
+    """
+    try:
+        payload = {
+            "prompt": request.prompt,
+            "duration": request.duration,
+            "bitrate": request.bitrate,
+            "mode": request.mode,
+            "intensity": request.intensity,
+            "format": request.format
+        }
+
+        # Send request to Mubert API to start generation
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://music-api.mubert.com/api/v3/public/tracks",
+                json=payload,
+                headers=get_mubert_headers(),
+                timeout=30.0
+            )
+            response.raise_for_status()
+
+            # Return the response from Mubert API (contains track ID)
+            mubert_response = response.json()
+            track_id = mubert_response["data"]["id"]
+
+            return {
+                "status": "started",
+                "track_id": track_id,
+                "mubert_data": mubert_response["data"]
+            }
+
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=e.response.status_code,
+            detail=f"Mubert API error: {e.response.text}"
+        ) from e
+    except httpx.RequestError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Request to Mubert API failed: {str(e)}"
+        ) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected error: {str(e)}"
+        ) from e
+
+
+class MubertTrackResponse(BaseModel):
+    status: str
+    track_id: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+@app.get("/get_mubert_track", response_model=MubertTrackResponse)
+async def get_mubert_track(track_id: str):
+    """
+    Get the status for a Mubert generated track. If completed, downloads the track
+    and stores it in the storage system, returning track ID for frontend access.
+
+    Args:
+        track_id: The track ID returned from start_mubert_generation
+
+    Returns:
+        MubertTrackResponse with status and stored track reference
+    """
+    try:
+        storage = get_audio_storage()
+
+        # Send request to Mubert API to check track status
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"https://music-api.mubert.com/api/v3/public/tracks/{track_id}",
+                headers=get_mubert_headers(),
+                timeout=30.0
+            )
+            response.raise_for_status()
+
+            mubert_data = response.json()["data"]
+
+            # Check generation status
+            generations = mubert_data.get("generations", [])
+            if not generations:
+                return MubertTrackResponse(status="no_generations")
+
+            generation = generations[0]  # Use first generation
+            generation_status = generation.get("status", "unknown")
+
+            # If track is still being processed, return the status
+            if generation_status == "processing":
+                return MubertTrackResponse(status="processing")
+
+            # If track is completed, download and store it
+            if generation_status == "done":
+                track_url = generation.get("url")
+
+                if not track_url:
+                    raise HTTPException(status_code=500, detail="Track URL not found in response")
+
+                # Download and store the track
+                logger.info(f"Downloading Mubert track {track_id}")
+                track_response = await client.get(track_url, timeout=60.0)
+                track_response.raise_for_status()
+
+                track_metadata = {
+                    'processing_type': 'mubert_generation',
+                    'mubert_track_id': track_id,
+                    'prompt': mubert_data.get('prompt'),
+                    'duration': mubert_data.get('duration'),
+                    'intensity': mubert_data.get('intensity'),
+                    'mode': mubert_data.get('mode'),
+                    'bpm': mubert_data.get('bpm'),
+                    'key': mubert_data.get('key'),
+                    'generated_at': generation.get('generated_at'),
+                    'format': generation.get('format'),
+                    'bitrate': generation.get('bitrate')
+                }
+
+                stored_track_id = storage.store_audio(
+                    track_response.content,
+                    f"mubert_track_{track_id}.{generation.get('format', 'mp3')}",
+                    track_metadata
+                )
+                logger.info(f"Stored Mubert track as {stored_track_id}")
+
+                response_metadata = {
+                    'mubert_track_id': track_id,
+                    'prompt': mubert_data.get('prompt'),
+                    'duration': mubert_data.get('duration'),
+                    'bpm': mubert_data.get('bpm'),
+                    'key': mubert_data.get('key'),
+                    'generated_at': generation.get('generated_at')
+                }
+
+                return MubertTrackResponse(
+                    status="completed",
+                    track_id=stored_track_id,
+                    metadata=response_metadata
+                )
+
+            # For any other status, return the raw status
+            return MubertTrackResponse(status=generation_status)
+
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=e.response.status_code,
+            detail=f"Mubert API error: {e.response.text}"
+        ) from e
+    except httpx.RequestError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Request to Mubert API failed: {str(e)}"
+        ) from e
+    except Exception as e:
+        logger.error(f"Error in get_mubert_track: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Unexpected error: {str(e)}"

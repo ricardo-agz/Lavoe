@@ -197,17 +197,17 @@ class AudioStorage:
     
     def list_tracks(self, limit: int = 100) -> List[Dict[str, Any]]:
         """
-        List all stored tracks with lightweight summaries.
+        List all stored tracks with lightweight summaries, sorted by date modified (newest first).
         
         Args:
             limit: Maximum number of tracks to return
             
         Returns:
-            List of track summaries
+            List of track summaries sorted by created_at in descending order
         """
         summaries = []
         # Get all JSON metadata files
-        json_files = list(self.storage_dir.glob("*.json"))[:limit]
+        json_files = list(self.storage_dir.glob("*.json"))
         
         for json_file in json_files:
             track_id = json_file.stem
@@ -215,7 +215,11 @@ class AudioStorage:
             if summary:
                 summaries.append(summary)
         
-        return summaries
+        # Sort by created_at in descending order (newest first)
+        summaries.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+        
+        # Apply limit after sorting
+        return summaries[:limit]
     
     def delete_track(self, track_id: str) -> bool:
         """
