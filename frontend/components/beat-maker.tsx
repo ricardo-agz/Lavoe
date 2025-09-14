@@ -39,23 +39,6 @@ const initialTracks: Track[] = [
   },
 ];
 
-// Test block for debugging audio playback
-const createTestAudioElement = () => {
-  // Create a simple test tone using Web Audio API
-  const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-  const oscillator = audioContext.createOscillator();
-  const gainNode = audioContext.createGain();
-  
-  oscillator.connect(gainNode);
-  gainNode.connect(audioContext.destination);
-  
-  oscillator.frequency.setValueAtTime(440, audioContext.currentTime); // A4 note
-  oscillator.type = 'sine';
-  gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
-  
-  return { oscillator, gainNode, audioContext };
-};
-
 const initialBlocks: MusicBlock[] = [];
 
 const TIMELINE_WIDTH = 800;
@@ -84,45 +67,6 @@ export default function BeatMaker() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const trackAudioRefs = useRef<Map<string, HTMLAudioElement>>(new Map());
 
-  // Test audio function to verify audio system works
-  const testAudio = async () => {
-    try {
-      console.log("🔊 Testing audio system...");
-      
-      if (!audioContextRef.current) {
-        console.error("❌ No audio context available");
-        return;
-      }
-
-      if (audioContextRef.current.state === "suspended") {
-        await audioContextRef.current.resume();
-        console.log("✅ Audio context resumed for test");
-      }
-
-      // Create a simple test tone
-      const oscillator = audioContextRef.current.createOscillator();
-      const gainNode = audioContextRef.current.createGain();
-      
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContextRef.current.destination);
-      
-      oscillator.frequency.setValueAtTime(440, audioContextRef.current.currentTime); // A4 note
-      oscillator.type = 'sine';
-      gainNode.gain.setValueAtTime(0.1, audioContextRef.current.currentTime);
-      
-      oscillator.start();
-      
-      // Stop after 1 second
-      setTimeout(() => {
-        oscillator.stop();
-        console.log("🔊 Test tone completed");
-      }, 1000);
-      
-    } catch (error) {
-      console.error("❌ Test audio failed:", error);
-    }
-  };
-
   // Initialize Web Audio API
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -146,8 +90,6 @@ export default function BeatMaker() {
       );
       console.log("Audio refs map size:", trackAudioRefs.current.size);
       console.log("Current time:", currentTime);
-      console.log("Blocks on timeline:", blocks.length);
-      console.log("Blocks:", blocks);
 
       // Initialize audio context with user gesture
       if (audioContextRef.current?.state === "suspended") {
@@ -252,87 +194,94 @@ export default function BeatMaker() {
         audioElement.currentTime = 0;
       }
     });
-    
+
     console.log(`🔄 Reset to time 0`);
   };
 
   const fastForward = () => {
     const skipAmount = 8; // Skip forward 8 measures
     const newTime = Math.min(currentTime + skipAmount, TIMELINE_MEASURES - 1);
-    
+
     // Stop all currently playing audio
-    trackAudioRefs.current.forEach(audioElement => {
+    trackAudioRefs.current.forEach((audioElement) => {
       audioElement.pause();
       audioElement.currentTime = 0;
     });
-    
+
     setCurrentTime(newTime);
-    
+
     // If playing, set justResumed flag to trigger audio at new position
     if (isPlaying) {
       setJustResumed(true);
     }
-    
+
     console.log(`⏩ Fast forward to time ${newTime}`);
   };
 
   const rewind = () => {
     const skipAmount = 8; // Skip backward 8 measures
     const newTime = Math.max(currentTime - skipAmount, 0);
-    
+
     // Stop all currently playing audio
-    trackAudioRefs.current.forEach(audioElement => {
+    trackAudioRefs.current.forEach((audioElement) => {
       audioElement.pause();
       audioElement.currentTime = 0;
     });
-    
+
     setCurrentTime(newTime);
-    
+
     // If playing, set justResumed flag to trigger audio at new position
     if (isPlaying) {
       setJustResumed(true);
     }
-    
+
     console.log(`⏪ Rewind to time ${newTime}`);
   };
 
   const exportTimeline = async () => {
     try {
-      console.log('🎵 Starting timeline export...');
-      
+      console.log("🎵 Starting timeline export...");
+
       // Create an offline audio context for rendering
       const sampleRate = 44100;
-      const timelineDurationInSeconds = (TIMELINE_MEASURES * 60 / bpm * 4); // Convert measures to seconds
-      const offlineContext = new OfflineAudioContext(2, sampleRate * timelineDurationInSeconds, sampleRate);
-      
+      const timelineDurationInSeconds = ((TIMELINE_MEASURES * 60) / bpm) * 4; // Convert measures to seconds
+      const offlineContext = new OfflineAudioContext(
+        2,
+        sampleRate * timelineDurationInSeconds,
+        sampleRate
+      );
+
       const blockPositions: { buffer: AudioBuffer; startTime: number }[] = [];
-      
+
       // Load all audio files and decode them
       for (const block of blocks) {
         const track = tracks[block.track];
         if (track && (track.audioFile || track.audioBlob) && !track.muted) {
           try {
-            const audioData = track.audioFile ? 
-              await track.audioFile.arrayBuffer() : 
-              await track.audioBlob!.arrayBuffer();
-            
+            const audioData = track.audioFile
+              ? await track.audioFile.arrayBuffer()
+              : await track.audioBlob!.arrayBuffer();
+
             const audioBuffer = await offlineContext.decodeAudioData(audioData);
-            
+
             // Calculate start time in seconds
-            const startTimeInSeconds = (block.startTime * 60 / bpm * 4);
-            
+            const startTimeInSeconds = ((block.startTime * 60) / bpm) * 4;
+
             blockPositions.push({
               buffer: audioBuffer,
-              startTime: startTimeInSeconds
+              startTime: startTimeInSeconds,
             });
-            
+
             console.log(`📁 Loaded "${block.name}" for export`);
           } catch (error) {
-            console.error(`❌ Failed to load audio for "${block.name}":`, error);
+            console.error(
+              `❌ Failed to load audio for "${block.name}":`,
+              error
+            );
           }
         }
       }
-      
+
       // Create audio sources and schedule them
       blockPositions.forEach(({ buffer, startTime }) => {
         const source = offlineContext.createBufferSource();
@@ -340,29 +289,28 @@ export default function BeatMaker() {
         source.connect(offlineContext.destination);
         source.start(startTime);
       });
-      
-      console.log('🎵 Rendering timeline...');
-      
+
+      console.log("🎵 Rendering timeline...");
+
       // Render the audio
       const renderedBuffer = await offlineContext.startRendering();
-      
+
       // Convert to WAV and download
       const wavBlob = audioBufferToWav(renderedBuffer);
       const url = URL.createObjectURL(wavBlob);
-      
-      const a = document.createElement('a');
+
+      const a = document.createElement("a");
       a.href = url;
       a.download = `lavoe-timeline-${Date.now()}.wav`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      
-      console.log('✅ Timeline exported successfully!');
-      
+
+      console.log("✅ Timeline exported successfully!");
     } catch (error) {
-      console.error('❌ Export failed:', error);
-      alert('Export failed. Please try again.');
+      console.error("❌ Export failed:", error);
+      alert("Export failed. Please try again.");
     }
   };
 
@@ -373,18 +321,18 @@ export default function BeatMaker() {
     const sampleRate = buffer.sampleRate;
     const arrayBuffer = new ArrayBuffer(44 + length * numberOfChannels * 2);
     const view = new DataView(arrayBuffer);
-    
+
     // WAV header
     const writeString = (offset: number, string: string) => {
       for (let i = 0; i < string.length; i++) {
         view.setUint8(offset + i, string.charCodeAt(i));
       }
     };
-    
-    writeString(0, 'RIFF');
+
+    writeString(0, "RIFF");
     view.setUint32(4, 36 + length * numberOfChannels * 2, true);
-    writeString(8, 'WAVE');
-    writeString(12, 'fmt ');
+    writeString(8, "WAVE");
+    writeString(12, "fmt ");
     view.setUint32(16, 16, true);
     view.setUint16(20, 1, true);
     view.setUint16(22, numberOfChannels, true);
@@ -392,20 +340,23 @@ export default function BeatMaker() {
     view.setUint32(28, sampleRate * numberOfChannels * 2, true);
     view.setUint16(32, numberOfChannels * 2, true);
     view.setUint16(34, 16, true);
-    writeString(36, 'data');
+    writeString(36, "data");
     view.setUint32(40, length * numberOfChannels * 2, true);
-    
+
     // Convert float samples to 16-bit PCM
     let offset = 44;
     for (let i = 0; i < length; i++) {
       for (let channel = 0; channel < numberOfChannels; channel++) {
-        const sample = Math.max(-1, Math.min(1, buffer.getChannelData(channel)[i]));
-        view.setInt16(offset, sample * 0x7FFF, true);
+        const sample = Math.max(
+          -1,
+          Math.min(1, buffer.getChannelData(channel)[i])
+        );
+        view.setInt16(offset, sample * 0x7fff, true);
         offset += 2;
       }
     }
-    
-    return new Blob([arrayBuffer], { type: 'audio/wav' });
+
+    return new Blob([arrayBuffer], { type: "audio/wav" });
   };
 
   const handleBlockClick = (blockId: string) => {
@@ -413,16 +364,14 @@ export default function BeatMaker() {
   };
 
   const generateAIComponent = async (mode: "beat" | "agent" = "beat") => {
-    if (!aiPrompt.trim()) return;
-
     if (mode === "beat") {
+      if (!aiPrompt.trim()) return;
       // Handle Beatmaker mode - generate actual tracks
       await generateBeatovenTrack(aiPrompt);
     } else {
       // Handle Agent mode - trigger overlay only, no track/block creation
       // Trigger agentic overlay across header + timeline
       setAgenticOverlayTrigger((prev) => prev + 1);
-      setAiPrompt("");
     }
   };
 
@@ -882,7 +831,7 @@ export default function BeatMaker() {
 
       setBlocks((prev) => [...prev, newBlock]);
 
-      console.log("new block", newBlock)
+      console.log("new block", newBlock);
 
       // Update block duration once audio metadata loads
       audioElement.addEventListener("loadedmetadata", () => {
@@ -913,12 +862,14 @@ export default function BeatMaker() {
     setCurrentTime(time);
   };
 
-  const handleBlockMove = (blockId: string, newTime: number, newTrackIndex: number) => {
-    setBlocks(prevBlocks => 
-      prevBlocks.map(block => 
-        block.id === blockId 
-          ? { ...block, startTime: newTime, track: newTrackIndex }
-          : block
+  const handleBlockMove = (
+    blockId: string,
+    newTime: number,
+    newTrackIndex: number
+  ) => {
+    setBlocks((prevBlocks) =>
+      prevBlocks.map((block) =>
+        block.id === blockId ? { ...block, startTime: newTime } : block
       )
     );
   };
@@ -935,16 +886,15 @@ export default function BeatMaker() {
           onRecordingComplete={handleRecordingComplete}
         />
       </div>
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col relative">
+        {/* Overlay should cover header + timeline area only */}
+        <AgenticBlurOverlay trigger={agenticOverlayTrigger} />
         <BeatHeader
           bpm={bpm}
           isPlaying={isPlaying}
           onStart={startPlayback}
           onStop={stopPlayback}
           onReset={resetPlayback}
-          onFastForward={fastForward}
-          onRewind={rewind}
-          onExport={exportTimeline}
         />
         <BeatTimeline
           currentTime={currentTime}
@@ -969,27 +919,32 @@ export default function BeatMaker() {
         onAddTrackToEditor={handleAddTrackToEditor}
         blocks={blocks}
         onBlockMove={(blockId: string, newTime: number) => {
-          setBlocks(prevBlocks =>
-            prevBlocks.map(block =>
-              block.id === blockId
-                ? { ...block, startTime: newTime }
-                : block
+          setBlocks((prevBlocks) =>
+            prevBlocks.map((block) =>
+              block.id === blockId ? { ...block, startTime: newTime } : block
             )
           );
         }}
         onAddChopsToEditor={async (chops: any[], originalTrackName: string) => {
           // Create tracks and blocks for each chop
           const trackColors = [
-            "bg-blue-600", "bg-cyan-500", "bg-violet-600", "bg-pink-500",
-            "bg-emerald-500", "bg-orange-500", "bg-red-500", "bg-yellow-500",
-            "bg-indigo-500", "bg-purple-500"
+            "bg-blue-600",
+            "bg-cyan-500",
+            "bg-violet-600",
+            "bg-pink-500",
+            "bg-emerald-500",
+            "bg-orange-500",
+            "bg-red-500",
+            "bg-yellow-500",
+            "bg-indigo-500",
+            "bg-purple-500",
           ];
 
           const newTracks: Track[] = [];
           const newBlocks: MusicBlock[] = [];
           let currentTime = 0; // Start placing chops sequentially
 
-          console.log('🍞 Creating audio elements for', chops.length, 'chops');
+          console.log("🍞 Creating audio elements for", chops.length, "chops");
 
           // Process chops sequentially to avoid overwhelming the backend
           for (let index = 0; index < chops.length; index++) {
@@ -999,12 +954,18 @@ export default function BeatMaker() {
 
             try {
               // Download the chop audio file from backend
-              console.log(`🎵 Downloading chop ${index + 1} audio (ID: ${chop.track_id})`);
-              const response = await fetch(`http://localhost:8000/tracks/${chop.track_id}/download`);
+              console.log(
+                `🎵 Downloading chop ${index + 1} audio (ID: ${chop.track_id})`
+              );
+              const response = await fetch(
+                `http://localhost:8000/tracks/${chop.track_id}/download`
+              );
 
               if (response.ok) {
                 const audioBlob = await response.blob();
-                const audioFile = new File([audioBlob], chop.filename, { type: audioBlob.type });
+                const audioFile = new File([audioBlob], chop.filename, {
+                  type: audioBlob.type,
+                });
 
                 // Create track for this chop
                 const newTrack: Track = {
@@ -1019,13 +980,20 @@ export default function BeatMaker() {
                 // Create audio element for timeline playback
                 const audioElement = new Audio(URL.createObjectURL(audioBlob));
                 audioElement.loop = false;
-                audioElement.preload = 'metadata';
+                audioElement.preload = "metadata";
                 trackAudioRefs.current.set(chopTrackId, audioElement);
 
-                console.log(`✅ Created audio element for chop ${index + 1} (track: ${chopTrackId})`);
+                console.log(
+                  `✅ Created audio element for chop ${
+                    index + 1
+                  } (track: ${chopTrackId})`
+                );
 
                 // Convert chop duration to measures (assuming 160 BPM, 4 beats per measure)
-                const durationInMeasures = Math.max(1, (chop.duration_seconds / 60) * (160 / 4));
+                const durationInMeasures = Math.max(
+                  1,
+                  (chop.duration_seconds / 60) * (160 / 4)
+                );
 
                 // Create block for this chop
                 const newBlock: MusicBlock = {
@@ -1044,9 +1012,11 @@ export default function BeatMaker() {
 
                 // Place next chop after this one
                 currentTime += durationInMeasures;
-
               } else {
-                console.error(`❌ Failed to download chop ${index + 1} audio:`, response.statusText);
+                console.error(
+                  `❌ Failed to download chop ${index + 1} audio:`,
+                  response.statusText
+                );
               }
             } catch (error) {
               console.error(`❌ Error processing chop ${index + 1}:`, error);
@@ -1054,11 +1024,15 @@ export default function BeatMaker() {
           }
 
           // Add new tracks and blocks to the editor
-          setTracks(prevTracks => [...prevTracks, ...newTracks]);
-          setBlocks(prevBlocks => [...prevBlocks, ...newBlocks]);
+          setTracks((prevTracks) => [...prevTracks, ...newTracks]);
+          setBlocks((prevBlocks) => [...prevBlocks, ...newBlocks]);
 
-          console.log(`🍞 Added ${newTracks.length} chop tracks and ${newBlocks.length} chop blocks to editor`);
-          console.log(`🎵 Audio refs map now has ${trackAudioRefs.current.size} elements`);
+          console.log(
+            `🍞 Added ${newTracks.length} chop tracks and ${newBlocks.length} chop blocks to editor`
+          );
+          console.log(
+            `🎵 Audio refs map now has ${trackAudioRefs.current.size} elements`
+          );
         }}
       />
     </div>
