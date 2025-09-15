@@ -81,15 +81,15 @@ function TrackWaveform({
   );
 }
 
-interface TracksPanelProps {
+interface CatalogProps {
   refreshTrigger?: number;
   onAddToEditor?: (trackId: string, filename: string) => void;
 }
 
-export default function TracksPanel({
+export default function Catalog({
   refreshTrigger,
   onAddToEditor,
-}: TracksPanelProps) {
+}: CatalogProps) {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [loading, setLoading] = useState(true);
   const [playingTrack, setPlayingTrack] = useState<string | null>(null);

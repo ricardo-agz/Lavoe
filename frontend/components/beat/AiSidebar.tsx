@@ -17,7 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import TracksPanel from "./TracksPanel";
+import Catalog from "./Catalog";
 import { useChat } from "@ai-sdk/react";
 import { openai } from "@ai-sdk/openai";
 import { MusicBlock } from "./types";
@@ -660,7 +660,7 @@ export default function AiSidebar({
           value="tracks"
           className="flex-1 m-0 flex flex-col min-h-0"
         >
-          <TracksPanel
+          <Catalog
             refreshTrigger={tracksRefreshTrigger}
             onAddToEditor={onAddTrackToEditor}
           />

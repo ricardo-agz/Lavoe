@@ -4,19 +4,13 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Volume2,
-  Mic,
-  Plus,
-  MoreHorizontal,
-  Upload,
-  FileAudio,
-} from "lucide-react";
+import { Volume2, Mic, Plus, MoreHorizontal, Upload, Menu } from "lucide-react";
 import { Track } from "./types";
 import { FileUpload } from "./FileUpload";
 import { AudioPlayer } from "./AudioPlayer";
 import { RecordingComponent } from "./RecordingComponent";
 import { Waveform } from "./Waveform";
+import { NavRail, type NavRailItemConfig } from "@/components/ui/nav-rail";
 
 interface TracksSidebarProps {
   tracks: Track[];
@@ -35,115 +29,41 @@ export function TracksSidebar({
   onFileUpload,
   onRecordingComplete,
 }: TracksSidebarProps) {
-  const [activeView, setActiveView] = useState<
-    "tracks" | "record" | "upload" | null
-  >(null);
+  type ViewKey = "tracks" | "record" | "upload";
+  const [activeView, setActiveView] = useState<ViewKey | null>(null);
+
+  const navItems: NavRailItemConfig[] = [
+    {
+      key: "tracks",
+      label: "Tracks",
+      icon: Menu,
+    },
+    {
+      key: "record",
+      label: "Record",
+      icon: Mic,
+    },
+    {
+      key: "upload",
+      label: "Upload",
+      icon: Upload,
+    },
+  ];
 
   return (
     <div className="h-full bg-background flex flex-col">
-      {/* Header with Logo */}
-      <div className="h-14 flex items-center justify-front px-3">
-        <img src="/Lavoe.png" alt="Lavoe" className="h-5 w-auto" />
-      </div>
-
       {/* Main Container */}
       <div className="flex-1 flex">
         {/* Left Navigation */}
-        <div className="w-[88px] border-r border-border flex flex-col">
-          <div className="flex flex-col items-center pt-3 gap-2">
-            <Button
-              variant="ghost"
-              className={`w-16 h-16 rounded-xl flex flex-col items-center justify-center gap-2 group ${
-                activeView === "tracks" ? "bg-muted/50" : "hover:bg-muted/30"
-              }`}
-              onClick={() =>
-                setActiveView(activeView === "tracks" ? null : "tracks")
-              }
-            >
-              <div
-                className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
-                  activeView === "tracks"
-                    ? "bg-indigo-500"
-                    : "bg-muted group-hover:bg-muted/80"
-                }`}
-              >
-                <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
-                  <rect
-                    x="2"
-                    y="3"
-                    width="12"
-                    height="2"
-                    rx="1"
-                    fill="currentColor"
-                  />
-                  <rect
-                    x="2"
-                    y="7"
-                    width="12"
-                    height="2"
-                    rx="1"
-                    fill="currentColor"
-                  />
-                  <rect
-                    x="2"
-                    y="11"
-                    width="12"
-                    height="2"
-                    rx="1"
-                    fill="currentColor"
-                  />
-                </svg>
-              </div>
-              <span className="text-[11px] text-muted-foreground">Tracks</span>
-            </Button>
-
-            <Button
-              variant="ghost"
-              className={`w-16 h-16 rounded-xl flex flex-col items-center justify-center gap-2 group ${
-                activeView === "record" ? "bg-muted/50" : "hover:bg-muted/30"
-              }`}
-              onClick={() =>
-                setActiveView(activeView === "record" ? null : "record")
-              }
-            >
-              <div
-                className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
-                  activeView === "record"
-                    ? "bg-indigo-500"
-                    : "bg-muted group-hover:bg-muted/80"
-                }`}
-              >
-                <Mic className="h-4.5 w-4.5 text-white" />
-              </div>
-              <span className="text-[11px] text-muted-foreground">Record</span>
-            </Button>
-
-            <Button
-              variant="ghost"
-              className={`w-16 h-16 rounded-xl flex flex-col items-center justify-center gap-2 group ${
-                activeView === "upload" ? "bg-muted/50" : "hover:bg-muted/30"
-              }`}
-              onClick={() =>
-                setActiveView(activeView === "upload" ? null : "upload")
-              }
-            >
-              <div
-                className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
-                  activeView === "upload"
-                    ? "bg-indigo-500"
-                    : "bg-muted group-hover:bg-muted/80"
-                }`}
-              >
-                <Upload className="h-4.5 w-4.5 text-white" />
-              </div>
-              <span className="text-[11px] text-muted-foreground">Upload</span>
-            </Button>
-          </div>
-        </div>
+        <NavRail
+          items={navItems}
+          activeKey={activeView}
+          onChange={(key) => setActiveView(key as ViewKey | null)}
+        />
 
         {/* Content Area */}
         {activeView === "tracks" && (
-          <div className="w-[250px] bg-background border-t border-border">
+          <div className="w-[250px] bg-background border-border">
             <div className="h-14 flex items-center px-4">
               <span className="text-sm font-medium text-foreground">
                 Tracks
