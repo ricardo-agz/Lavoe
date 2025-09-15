@@ -12,8 +12,12 @@ export interface BeatTimelineProps {
   onBlockClick: (id: string) => void;
   onTimelineClick?: (time: number, trackIndex: number) => void;
   onTimeChange?: (time: number) => void;
-  onBlockMove?: (blockId: string, newTime: number, newTrackIndex: number) => void;
-  insertionPoint?: {time: number, trackIndex: number} | null;
+  onBlockMove?: (
+    blockId: string,
+    newTime: number,
+    newTrackIndex: number
+  ) => void;
+  insertionPoint?: { time: number; trackIndex: number } | null;
   totalMeasures: number;
 }
 
@@ -74,48 +78,57 @@ export default function BeatTimeline({
 }: BeatTimelineProps) {
   const handleTimelineClick = (event: React.MouseEvent<HTMLDivElement>) => {
     if (!onTimelineClick || !event.currentTarget) return;
-    
+
     const rect = event.currentTarget.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
-    
+
     // Calculate time position with snap to grid
     const rawTimePosition = (x / rect.width) * totalMeasures;
     const snappedTime = Math.round(rawTimePosition * 4) / 4; // Snap to quarter beats
-    
+
     // Calculate track index
     const trackHeight = rect.height / tracks.length;
     const trackIndex = Math.floor(y / trackHeight);
-    
+
     // Clamp track index to valid range
-    const clampedTrackIndex = Math.max(0, Math.min(trackIndex, tracks.length - 1));
-    
+    const clampedTrackIndex = Math.max(
+      0,
+      Math.min(trackIndex, tracks.length - 1)
+    );
+
     onTimelineClick(snappedTime, clampedTrackIndex);
   };
 
   const handleScrubberMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
     event.preventDefault();
     event.stopPropagation();
-    
+
     const handleMouseMove = (e: MouseEvent) => {
       if (!event.currentTarget) return;
       const rect = event.currentTarget.getBoundingClientRect();
       const x = e.clientX - rect.left;
-      const timePosition = Math.max(0, Math.min((x / rect.width) * totalMeasures, totalMeasures));
-      
+      const timePosition = Math.max(
+        0,
+        Math.min((x / rect.width) * totalMeasures, totalMeasures)
+      );
+
       if (onTimeChange) {
         onTimeChange(timePosition);
       }
     };
 
     const handleMouseUp = () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
     };
 
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
   };
+
+  // Minimum number of visual rows so a single track isn't oversized
+  const visualRows = Math.max(tracks.length, 4);
 
   return (
     <div className="flex-1 p-6">
@@ -132,29 +145,33 @@ export default function BeatTimeline({
         </div>
 
         <div className="mt-8 relative flex-1">
-          <div 
+          {/* Timeline grid and blocks */}
+          <div
             className="flex-1 min-h-[calc(100vh-280px)] bg-background border border-border rounded relative overflow-hidden cursor-crosshair"
             onClick={handleTimelineClick}
             onDragOver={(e) => {
               e.preventDefault();
-              e.dataTransfer.dropEffect = 'move';
+              e.dataTransfer.dropEffect = "move";
             }}
             onDrop={(e) => {
               e.preventDefault();
-              const blockId = e.dataTransfer.getData('text/plain');
+              const blockId = e.dataTransfer.getData("text/plain");
               const rect = e.currentTarget.getBoundingClientRect();
               const x = e.clientX - rect.left;
               const y = e.clientY - rect.top;
-              
+
               // Calculate new position
               const newTime = Math.max(0, (x / rect.width) * totalMeasures);
               const trackHeight = rect.height / tracks.length;
               const newTrackIndex = Math.floor(y / trackHeight);
-              
+
               // Snap to grid
               const snappedTime = Math.round(newTime * 4) / 4;
-              const clampedTrackIndex = Math.max(0, Math.min(newTrackIndex, tracks.length - 1));
-              
+              const clampedTrackIndex = Math.max(
+                0,
+                Math.min(newTrackIndex, tracks.length - 1)
+              );
+
               // Update block position
               if (onBlockMove) {
                 onBlockMove(blockId, snappedTime, clampedTrackIndex);
@@ -196,8 +213,8 @@ export default function BeatTimeline({
                   className="absolute w-0.5 bg-green-500 z-40"
                   style={{
                     left: `${(insertionPoint.time / totalMeasures) * 100}%`,
-                    top: '0%',
-                    height: '100%',
+                    top: "0%",
+                    height: "100%",
                   }}
                 />
                 {/* Highlighted track area */}
@@ -205,9 +222,11 @@ export default function BeatTimeline({
                   className="absolute bg-green-500/20 border border-green-500/50 z-30"
                   style={{
                     left: `${(insertionPoint.time / totalMeasures) * 100}%`,
-                    top: `${(insertionPoint.trackIndex / tracks.length) * 100}%`,
+                    top: `${
+                      (insertionPoint.trackIndex / tracks.length) * 100
+                    }%`,
                     height: `${100 / tracks.length}%`,
-                    width: '2%',
+                    width: "2%",
                   }}
                 />
                 {/* Arrow indicator */}
@@ -215,8 +234,10 @@ export default function BeatTimeline({
                   className="absolute w-0 h-0 border-l-2 border-r-2 border-b-4 border-l-transparent border-r-transparent border-b-green-500 z-50"
                   style={{
                     left: `${(insertionPoint.time / totalMeasures) * 100}%`,
-                    top: `${(insertionPoint.trackIndex / tracks.length) * 100}%`,
-                    transform: 'translateX(-50%)',
+                    top: `${
+                      (insertionPoint.trackIndex / tracks.length) * 100
+                    }%`,
+                    transform: "translateX(-50%)",
                   }}
                 />
               </>
@@ -235,26 +256,29 @@ export default function BeatTimeline({
                 style={{
                   left: `${(block.startTime / totalMeasures) * 100}%`,
                   width: `${(block.duration / totalMeasures) * 100}%`,
-                  top: `${(block.track / tracks.length) * 60 + 10}%`,
-                  height: `${60 / tracks.length - 2}%`,
+                  top: `${(block.track / visualRows) * 60 + 10}%`,
+                  height: `${60 / visualRows - 2}%`,
                 }}
                 onClick={() => onBlockClick(block.id)}
                 draggable={true}
                 onDragStart={(e) => {
-                  e.dataTransfer.setData('text/plain', block.id);
-                  e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData("text/plain", block.id);
+                  e.dataTransfer.effectAllowed = "move";
                 }}
                 onDragEnd={(e) => {
                   e.preventDefault();
                 }}
               >
                 <div className="p-1 h-full flex items-center justify-center overflow-hidden">
-                  {(block.audioFile || block.audioBlob) ? (
+                  {block.audioFile || block.audioBlob ? (
                     <Waveform
                       audioFile={block.audioFile}
                       audioBlob={block.audioBlob}
-                      width={Math.max(80, Math.floor((block.duration / totalMeasures) * 800))}
-                      height={Math.max(24, Math.floor((60 / tracks.length) * 0.9))}
+                      width={Math.max(
+                        80,
+                        Math.floor((block.duration / totalMeasures) * 800)
+                      )}
+                      height={Math.max(24, Math.floor((60 / visualRows) * 0.9))}
                       color="rgba(255, 255, 255, 0.8)"
                       className="w-full h-full"
                     />
@@ -270,7 +294,7 @@ export default function BeatTimeline({
             <div className="absolute top-2 left-2 text-xs text-gray-500">
               Piano Roll / MIDI Editor
             </div>
-            
+
             {insertionPoint && (
               <div className="absolute top-2 right-2 text-xs text-green-500 bg-green-500/10 px-2 py-1 rounded">
                 Insertion point set - Record audio to place here

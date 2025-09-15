@@ -8,36 +8,7 @@ import AgenticBlurOverlay from "@/components/beat/AgenticBlurOverlay";
 import { TracksSidebar } from "@/components/beat/TracksSidebar";
 import { MusicBlock, Track } from "@/components/beat/types";
 
-const initialTracks: Track[] = [
-  {
-    id: "track-1",
-    name: "Melody",
-    color: "bg-blue-600",
-    muted: false,
-    volume: 75,
-  },
-  {
-    id: "track-2",
-    name: "Bass",
-    color: "bg-cyan-500",
-    muted: false,
-    volume: 75,
-  },
-  {
-    id: "track-3",
-    name: "Drums",
-    color: "bg-violet-600",
-    muted: false,
-    volume: 75,
-  },
-  {
-    id: "track-4",
-    name: "Percussion",
-    color: "bg-pink-500",
-    muted: false,
-    volume: 75,
-  },
-];
+const initialTracks: Track[] = [];
 
 const initialBlocks: MusicBlock[] = [];
 
