@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Catalog from "./Catalog";
+import { MusicLoadingState } from "./MusicLoadingState";
 import { useChat } from "@ai-sdk/react";
 import { openai } from "@ai-sdk/openai";
 import { MusicBlock } from "./types";
@@ -346,13 +347,8 @@ export default function AiSidebar({
         <TabsContent value="chat" className="flex-1 m-0 flex flex-col min-h-0">
           <div className="flex-1 p-4 space-y-4 overflow-y-auto">
             {mode === "beat" && isGeneratingTrack && (
-              <div className="rounded-lg p-3 bg-white/5 border border-white/10">
-                <div className="flex items-center gap-3 text-sm text-gray-200">
-                  <WandSparkles className="w-4 h-4 animate-spin text-yellow-300" />
-                  <span className="opacity-80">
-                    {generationStatus ? generationStatus : "Generating..."}
-                  </span>
-                </div>
+              <div className="w-full h-full min-h-[16rem] flex items-center justify-center">
+                <MusicLoadingState />
               </div>
             )}
 

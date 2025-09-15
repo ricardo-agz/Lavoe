@@ -134,3 +134,73 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* MusicLoadingState animations */
+@keyframes waveform-bounce {
+  0%,
+  100% {
+    transform: scaleY(0.5);
+  }
+  50% {
+    transform: scaleY(1.4);
+  }
+}
+
+.waveform-bar {
+  animation: waveform-bounce 1s ease-in-out infinite;
+  transform-origin: bottom;
+  border-radius: 2px 2px 0 0;
+}
+
+@keyframes note-float {
+  0% {
+    transform: translateY(10px) translateX(0) rotate(0deg);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-28px) translateX(6px) rotate(8deg);
+    opacity: 0;
+  }
+}
+
+.musical-note {
+  animation: note-float 2.2s ease-in-out infinite;
+}
+
+@keyframes vinyl-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.vinyl-record {
+  animation: vinyl-spin 4s linear infinite;
+}
+
+@keyframes sound-wave-pulse {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.6;
+  }
+  70% {
+    transform: scale(1.45);
+    opacity: 0.12;
+  }
+  100% {
+    transform: scale(1.55);
+    opacity: 0;
+  }
+}
+
+.sound-wave {
+  animation: sound-wave-pulse 1.9s ease-out infinite;
+}
