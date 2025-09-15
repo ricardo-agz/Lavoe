@@ -15,10 +15,11 @@ const initialBlocks: MusicBlock[] = [];
 const TIMELINE_WIDTH = 800;
 const TIMELINE_MEASURES = 64; // measures instead of seconds
 const PIXELS_PER_MEASURE = TIMELINE_WIDTH / TIMELINE_MEASURES;
+const START_MEASURE = 1; // Transport starts at measure 1
 
 export default function BeatMaker() {
   const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
+  const [currentTime, setCurrentTime] = useState(START_MEASURE);
   const [bpm, setBpm] = useState(160);
   const [blocks, setBlocks] = useState<MusicBlock[]>(initialBlocks);
   const [tracks, setTracks] = useState<Track[]>(initialTracks);
@@ -104,7 +105,10 @@ export default function BeatMaker() {
                   newTime >= block.startTime &&
                   newTime < block.startTime + block.duration;
 
-                if (wasBeforeBlock && isInBlock) {
+                // Edge: trigger when starting exactly at a block's start measure
+                const isAtBlockStartEdge = prev === block.startTime;
+
+                if ((wasBeforeBlock || isAtBlockStartEdge) && isInBlock) {
                   console.log(
                     `🎶 Blue line hit block "${block.name}" at time ${newTime}`
                   );
@@ -138,7 +142,7 @@ export default function BeatMaker() {
             }
           });
 
-          return newTime >= TIMELINE_MEASURES ? 0 : newTime;
+          return newTime >= TIMELINE_MEASURES ? START_MEASURE : newTime;
         });
       }, (60 / bpm / 4) * 1000); // quarter note timing based on BPM
     }
@@ -159,7 +163,7 @@ export default function BeatMaker() {
 
   const resetPlayback = () => {
     stopPlayback();
-    setCurrentTime(0);
+    setCurrentTime(START_MEASURE);
 
     // Reset all track audio to beginning
     trackAudioRefs.current.forEach((audioElement) => {
@@ -168,12 +172,12 @@ export default function BeatMaker() {
       }
     });
 
-    console.log(`🔄 Reset to time 0`);
+    console.log(`🔄 Reset to time ${START_MEASURE}`);
   };
 
   const fastForward = () => {
     const skipAmount = 8; // Skip forward 8 measures
-    const newTime = Math.min(currentTime + skipAmount, TIMELINE_MEASURES - 1);
+    const newTime = Math.min(currentTime + skipAmount, TIMELINE_MEASURES);
 
     // Stop all currently playing audio
     trackAudioRefs.current.forEach((audioElement) => {
@@ -193,7 +197,7 @@ export default function BeatMaker() {
 
   const rewind = () => {
     const skipAmount = 8; // Skip backward 8 measures
-    const newTime = Math.max(currentTime - skipAmount, 0);
+    const newTime = Math.max(currentTime - skipAmount, START_MEASURE);
 
     // Stop all currently playing audio
     trackAudioRefs.current.forEach((audioElement) => {
@@ -735,14 +739,14 @@ export default function BeatMaker() {
       audioElement.preload = "metadata";
       trackAudioRefs.current.set(trackId, audioElement);
 
-      // Create a music block at the start of the timeline (time 0)
+      // Create a music block at the start of the timeline (measure 1)
       // Duration will be set once audio metadata loads
       const newBlock: MusicBlock = {
         id: `block-${Date.now()}`,
         name: fileName,
         type: "melody",
         color: trackColors[tracks.length % trackColors.length],
-        startTime: 0, // Always start at beginning
+        startTime: START_MEASURE, // Always start at beginning
         duration: 8, // Temporary duration, will be updated
         track: tracks.length, // Use the new track index
         trackId: trackId, // Include track ID for AI agent
@@ -847,14 +851,14 @@ export default function BeatMaker() {
         preload: audioElement.preload,
       });
 
-      // Create a music block at the start of the timeline (time 0)
+      // Create a music block at the start of the timeline (measure 1)
       // Duration will be set once audio metadata loads
       const newBlock: MusicBlock = {
         id: `block-${Date.now()}`,
         name: trackName,
         type: "melody",
         color: trackColor,
-        startTime: 0, // Always start at beginning
+        startTime: START_MEASURE, // Always start at beginning
         duration: 8, // Temporary duration, will be updated
         track: tracks.length, // Use the new track index
         trackId: trackId, // Include track ID for AI agent
@@ -935,14 +939,14 @@ export default function BeatMaker() {
       trackAudioRefs.current.set(localTrackId, audioElement);
       trackAudioRefs.current.set(trackId, audioElement);
 
-      // Create a music block at the start of the timeline (time 0)
+      // Create a music block at the start of the timeline (measure 1)
       // Duration will be set once audio metadata loads
       const newBlock: MusicBlock = {
         id: `block-${Date.now()}`,
         name: fileName,
         type: "melody",
         color: trackColors[tracks.length % trackColors.length],
-        startTime: 0, // Always start at beginning
+        startTime: START_MEASURE, // Always start at beginning
         duration: 8, // Temporary duration, will be updated
         track: tracks.length, // Use the new track index
         trackId: trackId, // Include backend track ID for AI agent
@@ -1227,7 +1231,7 @@ export default function BeatMaker() {
 
           const newTracks: Track[] = [];
           const newBlocks: MusicBlock[] = [];
-          let currentTime = 0; // Start placing chops sequentially
+          let currentTime = START_MEASURE; // Start placing chops sequentially
 
           console.log("🍞 Creating audio elements for", chops.length, "chops");
 

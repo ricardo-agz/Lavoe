@@ -23,40 +23,43 @@ export interface BeatTimelineProps {
 
 function TimeMarkers({ totalMeasures }: { totalMeasures: number }) {
   const markers: ReactNode[] = [];
-  for (let i = 0; i <= totalMeasures; i += 4) {
-    if (i % 16 === 0) {
+  const START_MEASURE = 1;
+  const span = Math.max(1, totalMeasures - START_MEASURE);
+  for (let j = 0; j <= span; j += 4) {
+    const measure = START_MEASURE + j;
+    if (measure % 16 === 0) {
       markers.push(
         <div
-          key={`major-${i}`}
+          key={`major-${measure}`}
           className="absolute top-0 h-6 w-0.5 bg-white"
-          style={{ left: `${(i / totalMeasures) * 100}%` }}
+          style={{ left: `${(j / span) * 100}%` }}
         >
           <span className="absolute -top-8 -left-3 text-sm text-white font-mono font-bold">
-            {i}
+            {measure}
           </span>
         </div>
       );
     } else {
       markers.push(
         <div
-          key={`minor-${i}`}
+          key={`minor-${measure}`}
           className="absolute top-0 h-4 w-0.5 bg-white/60"
-          style={{ left: `${(i / totalMeasures) * 100}%` }}
+          style={{ left: `${(j / span) * 100}%` }}
         >
           <span className="absolute -top-7 -left-2 text-xs text-white/80 font-mono">
-            {i}
+            {measure}
           </span>
         </div>
       );
     }
   }
-  for (let i = 1; i < totalMeasures; i++) {
-    if (i % 4 !== 0) {
+  for (let measure = START_MEASURE + 1; measure < totalMeasures; measure++) {
+    if (measure % 4 !== 0) {
       markers.push(
         <div
-          key={`beat-${i}`}
+          key={`beat-${measure}`}
           className="absolute top-0 h-2 w-px bg-white/30"
-          style={{ left: `${(i / totalMeasures) * 100}%` }}
+          style={{ left: `${((measure - START_MEASURE) / span) * 100}%` }}
         />
       );
     }
@@ -83,9 +86,14 @@ export default function BeatTimeline({
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
 
-    // Calculate time position with snap to grid
-    const rawTimePosition = (x / rect.width) * totalMeasures;
-    const snappedTime = Math.round(rawTimePosition * 4) / 4; // Snap to quarter beats
+    // Calculate time position with snap to grid, starting at measure 1
+    const START_MEASURE = 1;
+    const span = Math.max(1, totalMeasures - START_MEASURE);
+    const rawTimePosition = START_MEASURE + (x / rect.width) * span;
+    const snappedTime = Math.max(
+      START_MEASURE,
+      Math.min(Math.round(rawTimePosition * 4) / 4, totalMeasures)
+    );
 
     // Calculate track index
     const trackHeight = rect.height / tracks.length;
@@ -108,9 +116,11 @@ export default function BeatTimeline({
       if (!event.currentTarget) return;
       const rect = event.currentTarget.getBoundingClientRect();
       const x = e.clientX - rect.left;
+      const START_MEASURE = 1;
+      const span = Math.max(1, totalMeasures - START_MEASURE);
       const timePosition = Math.max(
-        0,
-        Math.min((x / rect.width) * totalMeasures, totalMeasures)
+        START_MEASURE,
+        Math.min(START_MEASURE + (x / rect.width) * span, totalMeasures)
       );
 
       if (onTimeChange) {
@@ -137,7 +147,11 @@ export default function BeatTimeline({
           <TimeMarkers totalMeasures={totalMeasures} />
           <div
             className="absolute top-0 h-full w-0.5 bg-blue-500 z-50 cursor-pointer hover:w-1 transition-all"
-            style={{ left: `${(currentTime / totalMeasures) * 100}%` }}
+            style={{
+              left: `${
+                ((currentTime - 1) / Math.max(1, totalMeasures - 1)) * 100
+              }%`,
+            }}
             onMouseDown={handleScrubberMouseDown}
           >
             <div className="absolute -top-1 -left-2 w-0 h-0 border-l-2 border-r-2 border-b-4 border-l-transparent border-r-transparent border-b-blue-500"></div>
@@ -178,19 +192,24 @@ export default function BeatTimeline({
               }
             }}
           >
-            {Array.from({ length: totalMeasures + 1 }, (_, i) => (
-              <div
-                key={`grid-v-${i}`}
-                className={`absolute top-0 bottom-0 ${
-                  i % 16 === 0
-                    ? "border-l-2 border-border"
-                    : i % 4 === 0
-                    ? "border-l border-border/80"
-                    : "border-l border-border/50"
-                }`}
-                style={{ left: `${(i / totalMeasures) * 100}%` }}
-              />
-            ))}
+            {Array.from(
+              { length: Math.max(1, totalMeasures - 1) + 1 },
+              (_, j) => (
+                <div
+                  key={`grid-v-${j}`}
+                  className={`absolute top-0 bottom-0 ${
+                    (1 + j) % 16 === 0
+                      ? "border-l-2 border-border"
+                      : (1 + j) % 4 === 0
+                      ? "border-l border-border/80"
+                      : "border-l border-border/50"
+                  }`}
+                  style={{
+                    left: `${(j / Math.max(1, totalMeasures - 1)) * 100}%`,
+                  }}
+                />
+              )
+            )}
 
             {Array.from({ length: 17 }, (_, i) => (
               <div
@@ -202,7 +221,11 @@ export default function BeatTimeline({
 
             <div
               className="absolute top-0 bottom-0 w-0.5 bg-blue-500 z-50"
-              style={{ left: `${(currentTime / totalMeasures) * 100}%` }}
+              style={{
+                left: `${
+                  ((currentTime - 1) / Math.max(1, totalMeasures - 1)) * 100
+                }%`,
+              }}
             />
 
             {/* Insertion Point Indicator */}
@@ -212,7 +235,11 @@ export default function BeatTimeline({
                 <div
                   className="absolute w-0.5 bg-green-500 z-40"
                   style={{
-                    left: `${(insertionPoint.time / totalMeasures) * 100}%`,
+                    left: `${
+                      ((insertionPoint.time - 1) /
+                        Math.max(1, totalMeasures - 1)) *
+                      100
+                    }%`,
                     top: "0%",
                     height: "100%",
                   }}
@@ -221,7 +248,11 @@ export default function BeatTimeline({
                 <div
                   className="absolute bg-green-500/20 border border-green-500/50 z-30"
                   style={{
-                    left: `${(insertionPoint.time / totalMeasures) * 100}%`,
+                    left: `${
+                      ((insertionPoint.time - 1) /
+                        Math.max(1, totalMeasures - 1)) *
+                      100
+                    }%`,
                     top: `${
                       (insertionPoint.trackIndex / tracks.length) * 100
                     }%`,
@@ -233,7 +264,11 @@ export default function BeatTimeline({
                 <div
                   className="absolute w-0 h-0 border-l-2 border-r-2 border-b-4 border-l-transparent border-r-transparent border-b-green-500 z-50"
                   style={{
-                    left: `${(insertionPoint.time / totalMeasures) * 100}%`,
+                    left: `${
+                      ((insertionPoint.time - 1) /
+                        Math.max(1, totalMeasures - 1)) *
+                      100
+                    }%`,
                     top: `${
                       (insertionPoint.trackIndex / tracks.length) * 100
                     }%`,
@@ -254,8 +289,13 @@ export default function BeatTimeline({
                     : "border-transparent"
                 } hover:border-gray-300 opacity-90 z-10`}
                 style={{
-                  left: `${(block.startTime / totalMeasures) * 100}%`,
-                  width: `${(block.duration / totalMeasures) * 100}%`,
+                  left: `${
+                    ((block.startTime - 1) / Math.max(1, totalMeasures - 1)) *
+                    100
+                  }%`,
+                  width: `${
+                    (block.duration / Math.max(1, totalMeasures - 1)) * 100
+                  }%`,
                   top: `${(block.track / visualRows) * 60 + 10}%`,
                   height: `${60 / visualRows - 2}%`,
                 }}
