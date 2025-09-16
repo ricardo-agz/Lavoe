@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode } from "react";
+import { ReactNode, useRef } from "react";
 import { MusicBlock, Track } from "./types";
 import { Waveform } from "./Waveform";
 
@@ -79,6 +79,8 @@ export default function BeatTimeline({
   insertionPoint,
   totalMeasures,
 }: BeatTimelineProps) {
+  // Store drag offset to maintain relative cursor position during drag
+  const dragOffsetRef = useRef<{ x: number; y: number } | null>(null);
   const handleTimelineClick = (event: React.MouseEvent<HTMLDivElement>) => {
     if (!onTimelineClick || !event.currentTarget) return;
 
@@ -171,16 +173,30 @@ export default function BeatTimeline({
               e.preventDefault();
               const blockId = e.dataTransfer.getData("text/plain");
               const rect = e.currentTarget.getBoundingClientRect();
-              const x = e.clientX - rect.left;
-              const y = e.clientY - rect.top;
+              let x = e.clientX - rect.left;
+              let y = e.clientY - rect.top;
+
+              // Apply drag offset to maintain relative cursor position
+              if (dragOffsetRef.current) {
+                x -= dragOffsetRef.current.x;
+                y -= dragOffsetRef.current.y;
+              }
 
               // Calculate new position
-              const newTime = Math.max(0, (x / rect.width) * totalMeasures);
+              const START_MEASURE = 1;
+              const span = Math.max(1, totalMeasures - START_MEASURE);
+              const newTime = Math.max(
+                START_MEASURE,
+                START_MEASURE + (x / rect.width) * span
+              );
               const trackHeight = rect.height / tracks.length;
               const newTrackIndex = Math.floor(y / trackHeight);
 
               // Snap to grid
-              const snappedTime = Math.round(newTime * 4) / 4;
+              const snappedTime = Math.max(
+                START_MEASURE,
+                Math.min(Math.round(newTime * 4) / 4, totalMeasures)
+              );
               const clampedTrackIndex = Math.max(
                 0,
                 Math.min(newTrackIndex, tracks.length - 1)
@@ -190,6 +206,9 @@ export default function BeatTimeline({
               if (onBlockMove) {
                 onBlockMove(blockId, snappedTime, clampedTrackIndex);
               }
+
+              // Clear drag offset
+              dragOffsetRef.current = null;
             }}
           >
             {Array.from(
@@ -304,6 +323,20 @@ export default function BeatTimeline({
                 onDragStart={(e) => {
                   e.dataTransfer.setData("text/plain", block.id);
                   e.dataTransfer.effectAllowed = "move";
+
+                  // Calculate drag offset relative to the timeline container
+                  const timelineRect =
+                    e.currentTarget.parentElement?.getBoundingClientRect();
+                  const blockRect = e.currentTarget.getBoundingClientRect();
+
+                  if (timelineRect && blockRect) {
+                    // Calculate where on the block the user clicked (relative to timeline)
+                    const dragX = e.clientX - blockRect.left;
+                    const dragY = e.clientY - blockRect.top;
+
+                    // Store the offset for use during drop
+                    dragOffsetRef.current = { x: dragX, y: dragY };
+                  }
                 }}
                 onDragEnd={(e) => {
                   e.preventDefault();
