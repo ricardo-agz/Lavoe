@@ -323,16 +323,17 @@ export default function BeatTimeline({
                 onDragStart={(e) => {
                   e.dataTransfer.setData("text/plain", block.id);
                   e.dataTransfer.effectAllowed = "move";
-                  
+
                   // Calculate drag offset relative to the timeline container
-                  const timelineRect = e.currentTarget.parentElement?.getBoundingClientRect();
+                  const timelineRect =
+                    e.currentTarget.parentElement?.getBoundingClientRect();
                   const blockRect = e.currentTarget.getBoundingClientRect();
-                  
+
                   if (timelineRect && blockRect) {
                     // Calculate where on the block the user clicked (relative to timeline)
                     const dragX = e.clientX - blockRect.left;
                     const dragY = e.clientY - blockRect.top;
-                    
+
                     // Store the offset for use during drop
                     dragOffsetRef.current = { x: dragX, y: dragY };
                   }
