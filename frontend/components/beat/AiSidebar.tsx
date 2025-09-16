@@ -58,6 +58,39 @@ const colors = [
   "rgba(255,140,0,0.08)", // Dark Orange
 ];
 
+// Simple streaming text reveal component (UI-only)
+function StreamingText({
+  text,
+  className = "",
+  active = false,
+}: {
+  text: string;
+  className?: string;
+  active?: boolean;
+}) {
+  const [visibleLength, setVisibleLength] = useState(0);
+
+  useEffect(() => {
+    if (!active) {
+      // Immediately show full text when not actively streaming
+      setVisibleLength(text.length);
+      return;
+    }
+
+    // Reset when switching to active or text changes
+    setVisibleLength((len) => (len === 0 ? 0 : len));
+
+    const step = () =>
+      setVisibleLength((len) => Math.min(text.length, len + 1));
+    const id = window.setInterval(step, 12);
+    return () => window.clearInterval(id);
+  }, [text, active]);
+
+  // If text grows because of real-time streaming, reveal progressively
+  const content = active ? text.slice(0, visibleLength) : text;
+  return <div className={className}>{content}</div>;
+}
+
 const OperationCard = ({
   operation,
   colorIndex,
@@ -644,9 +677,11 @@ export default function AiSidebar({
                             if (part.type === "text") {
                               makeRow(
                                 "text",
-                                <div className="text-[#B7BCC5]">
-                                  {part.text}
-                                </div>,
+                                <StreamingText
+                                  className="text-[#B7BCC5]"
+                                  text={part.text}
+                                  active={isStreamingForThis}
+                                />,
                                 { isProcessing: false }
                               );
                               return;
