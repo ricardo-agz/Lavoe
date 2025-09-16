@@ -8,6 +8,7 @@ import {
   WandSparkles,
   MessageCircle,
   Music,
+  Loader2,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import {
@@ -23,6 +24,196 @@ import { useChat } from "@ai-sdk/react";
 import { openai } from "@ai-sdk/openai";
 import { MusicBlock } from "./types";
 import { DefaultChatTransport } from "ai";
+
+// Enhanced AI Response UI components (UI-only; does not alter streaming logic)
+interface ToolOperation {
+  id: string;
+  type: "moveBlock" | "chopAudio" | "adjustSpeed" | "text";
+  state:
+    | "input-streaming"
+    | "input-available"
+    | "output-available"
+    | "output-error"
+    | "complete";
+  input?: any;
+  output?: string;
+  errorText?: string;
+  text?: string;
+}
+
+interface EnhancedAIResponseProps {
+  operations: ToolOperation[];
+  isStreaming?: boolean;
+  className?: string;
+}
+
+const colors = [
+  "rgba(255,165,0,0.08)", // Orange
+  "rgba(255,69,0,0.08)", // Red-Orange
+  "rgba(255,20,147,0.08)", // Deep Pink
+  "rgba(138,43,226,0.08)", // Blue Violet
+  "rgba(0,191,255,0.08)", // Deep Sky Blue
+  "rgba(0,255,127,0.08)", // Spring Green
+  "rgba(255,255,0,0.08)", // Yellow
+  "rgba(255,140,0,0.08)", // Dark Orange
+];
+
+const OperationCard = ({
+  operation,
+  colorIndex,
+  isLast,
+}: {
+  operation: ToolOperation;
+  colorIndex: number;
+  isLast: boolean;
+}) => {
+  const isProcessing =
+    operation.state === "input-streaming" ||
+    operation.state === "input-available";
+  const isComplete =
+    operation.state === "output-available" || operation.state === "complete";
+  const hasError = operation.state === "output-error";
+
+  const getOperationDescription = (operation: ToolOperation) => {
+    switch (operation.type) {
+      case "moveBlock":
+        if (operation.state === "input-available" && operation.input) {
+          return `Moving block "${operation.input.blockId}" to measure ${operation.input.newStartTime}`;
+        }
+        return "Preparing to move block...";
+      case "chopAudio":
+        if (operation.state === "input-available" && operation.input) {
+          return `Chopping track "${operation.input.trackId}" (${operation.input.maxChops} chops, ${operation.input.nClusters} clusters)`;
+        }
+        return "Preparing to chop audio...";
+      case "adjustSpeed":
+        if (operation.state === "input-available" && operation.input) {
+          return `Adjusting speed of block "${operation.input.blockId}" to ${operation.input.speedFactor}x`;
+        }
+        return "Preparing to adjust speed...";
+      case "text":
+        return operation.text || "Processing text...";
+      default:
+        return "Processing...";
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex">
+        {/* Vertical indicator */}
+        <div className="flex flex-col items-center mr-4">
+          {/* Circle indicator */}
+          <div
+            className={`w-3 h-3 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${
+              isComplete ? "border-green-400/60" : "border-opacity-60"
+            }`}
+            style={{
+              borderColor: isComplete ? undefined : "rgba(250, 204, 21, 0.6)",
+              backgroundColor: isComplete
+                ? "rgba(34, 197, 94, 0.2)"
+                : "rgba(250, 204, 21, 0.3)",
+            }}
+          >
+            {isComplete && (
+              <div className="w-1.5 h-1.5 rounded-full bg-green-400/80" />
+            )}
+            {isProcessing && (
+              <div
+                className="w-1.5 h-1.5 rounded-full animate-pulse"
+                style={{ backgroundColor: "rgba(250, 204, 21, 0.8)" }}
+              />
+            )}
+          </div>
+
+          {/* Vertical line */}
+          {!isLast && (
+            <div
+              className="w-0.5 flex-1 rounded-full mt-1"
+              style={{
+                backgroundColor: "rgba(250, 204, 21, 0.2)",
+                minHeight: "20px",
+              }}
+            />
+          )}
+        </div>
+
+        {/* Main content */}
+        <div className="flex-1 flex items-start">
+          <p className="text-sm text-white/60 leading-relaxed">
+            {getOperationDescription(operation)}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+function EnhancedAIResponse({
+  operations,
+  isStreaming = false,
+  className = "",
+}: EnhancedAIResponseProps) {
+  const [visibleOperations, setVisibleOperations] = useState<ToolOperation[]>(
+    []
+  );
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  useEffect(() => {
+    if (operations.length === 0) return;
+
+    const timer = setInterval(() => {
+      if (currentIndex < operations.length) {
+        setVisibleOperations((prev) => [...prev, operations[currentIndex]]);
+        setCurrentIndex((prev) => prev + 1);
+      }
+    }, 800);
+
+    return () => clearInterval(timer);
+  }, [operations, currentIndex]);
+
+  if (operations.length === 0) return null;
+
+  return (
+    <div className={`space-y-1 ${className}`}>
+      {/* Header */}
+      <div className="flex items-center space-x-2 mb-3">
+        <div className="flex space-x-1">
+          {[...Array(4)].map((_, i) => (
+            <div
+              key={i}
+              className="w-1 h-1 rounded-full animate-pulse"
+              style={{
+                backgroundColor: colors[i % colors.length].replace(
+                  "0.08",
+                  "0.3"
+                ),
+                animationDelay: `${i * 0.2}s`,
+              }}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Operations */}
+      <div className="space-y-4">
+        {visibleOperations.map((operation, index) => (
+          <OperationCard
+            key={operation.id}
+            operation={operation}
+            colorIndex={index}
+            isLast={index === visibleOperations.length - 1}
+          />
+        ))}
+      </div>
+
+      {/* Streaming indicator */}
+      {isStreaming && visibleOperations.length === operations.length && (
+        <div className="flex justify-center py-3" />
+      )}
+    </div>
+  );
+}
 
 export interface AiSidebarProps {
   aiPrompt: string;
@@ -346,147 +537,320 @@ export default function AiSidebar({
 
         <TabsContent value="chat" className="flex-1 m-0 flex flex-col min-h-0">
           <div className="flex-1 p-4 space-y-4 overflow-y-auto">
-            {mode === "beat" && isGeneratingTrack && (
-              <div className="w-full h-full min-h-[16rem] flex items-center justify-center">
-                <MusicLoadingState />
-              </div>
-            )}
-
-            {/* Show agent chat messages when in agent mode */}
+            {/* Show agent chat messages when in agent mode (Enhanced UI) */}
             {mode === "agent" && messages.length > 0 && (
               <div className="space-y-3">
-                {messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`p-3 rounded-lg ${
-                      message.role === "user"
-                        ? "bg-blue-500/20 border border-blue-500/30 ml-8"
-                        : "bg-gray-500/20 border border-gray-500/30 mr-8"
-                    }`}
-                  >
-                    <div className="text-sm text-gray-300 font-medium mb-1">
-                      {message.role === "user" ? "You" : "Lavoe Agent"}
-                    </div>
-                    <div className="text-white text-sm space-y-2">
-                      {message.parts?.map((part: any, index: number) => {
-                        switch (part.type) {
-                          case "text":
-                            return <div key={index}>{part.text}</div>;
-                          case "tool-moveBlock":
-                            switch (part.state) {
-                              case "input-streaming":
-                                return (
-                                  <div key={index} className="text-yellow-400">
-                                    🔧 Preparing to move block...
-                                  </div>
-                                );
-                              case "input-available":
-                                return (
-                                  <div key={index} className="text-yellow-400">
-                                    🔧 Moving block "{part.input.blockId}" to
-                                    measure {part.input.newStartTime}...
-                                  </div>
-                                );
-                              case "output-available":
-                                return (
-                                  <div key={index} className="text-green-400">
-                                    ✅ {part.output}
-                                  </div>
-                                );
-                              case "output-error":
-                                return (
-                                  <div key={index} className="text-red-400">
-                                    ❌ Error: {part.errorText}
-                                  </div>
-                                );
+                {messages.map((message, msgIdx) => {
+                  const toOperations = (): ToolOperation[] => {
+                    const ops: ToolOperation[] = [];
+                    message.parts?.forEach((part: any, index: number) => {
+                      if (part.type === "text") {
+                        ops.push({
+                          id: `${message.id}-${index}`,
+                          type: "text",
+                          state: "complete",
+                          text: part.text,
+                        });
+                        return;
+                      }
+                      if (part.type === "tool-moveBlock") {
+                        ops.push({
+                          id: `${message.id}-${index}`,
+                          type: "moveBlock",
+                          state: part.state,
+                          input: part.input,
+                          output: part.output,
+                          errorText: part.errorText,
+                        });
+                        return;
+                      }
+                      if (part.type === "tool-chopAudio") {
+                        ops.push({
+                          id: `${message.id}-${index}`,
+                          type: "chopAudio",
+                          state: part.state,
+                          input: part.input,
+                          output: part.output,
+                          errorText: part.errorText,
+                        });
+                        return;
+                      }
+                      if (part.type === "tool-adjustSpeed") {
+                        ops.push({
+                          id: `${message.id}-${index}`,
+                          type: "adjustSpeed",
+                          state: part.state,
+                          input: part.input,
+                          output: part.output,
+                          errorText: part.errorText,
+                        });
+                        return;
+                      }
+                      // Ignore other internal parts (e.g., step-start)
+                    });
+                    return ops;
+                  };
+
+                  const isAssistant = message.role !== "user";
+                  const lastMessageId = messages[messages.length - 1]?.id;
+                  const isStreamingForThis =
+                    isAssistant && isLoading && message.id === lastMessageId;
+
+                  if (!isAssistant) {
+                    return (
+                      <div
+                        key={message.id}
+                        className="p-3 rounded-lg w-full bg-[#2F2F2F] border border-[#484848]"
+                      >
+                        <div className="text-gray-300 text-sm space-y-2">
+                          {message.parts?.map((part: any, index: number) =>
+                            part.type === "text" ? (
+                              <div key={index}>{part.text}</div>
+                            ) : null
+                          )}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div key={message.id} className="mr-8 p-3 rounded-lg">
+                      <div className="text-[#B7BCC5] text-sm space-y-3">
+                        {(() => {
+                          const rows: Array<{
+                            key: string;
+                            content: any;
+                            isComplete: boolean;
+                            isProcessing: boolean;
+                          }> = [];
+
+                          message.parts?.forEach((part: any, index: number) => {
+                            const makeRow = (
+                              keySuffix: string,
+                              content: any,
+                              opts: {
+                                isComplete?: boolean;
+                                isProcessing?: boolean;
+                              } = {}
+                            ) => {
+                              rows.push({
+                                key: `${message.id}-${index}-${keySuffix}`,
+                                content,
+                                isComplete: !!opts.isComplete,
+                                isProcessing: !!opts.isProcessing,
+                              });
+                            };
+
+                            if (part.type === "text") {
+                              makeRow(
+                                "text",
+                                <div className="text-[#B7BCC5]">
+                                  {part.text}
+                                </div>,
+                                { isProcessing: false }
+                              );
+                              return;
                             }
-                            break;
-                          case "tool-chopAudio":
-                            switch (part.state) {
-                              case "input-streaming":
-                                return (
-                                  <div key={index} className="text-yellow-400">
-                                    🍞 Preparing to chop audio...
-                                  </div>
+
+                            const includeStreaming =
+                              part.state === "input-streaming" ||
+                              part.state === "input-available" ||
+                              part.state === "output-available" ||
+                              part.state === "output-error";
+                            const includeInputAvailable =
+                              part.state === "input-available" ||
+                              part.state === "output-available" ||
+                              part.state === "output-error";
+                            const isSuccess =
+                              part.state === "output-available" ||
+                              part.state === "complete";
+                            const isError = part.state === "output-error"; // styled as yellow per spec
+
+                            if (part.type === "tool-moveBlock") {
+                              if (includeStreaming) {
+                                makeRow(
+                                  "input-streaming",
+                                  <div className="text-[#B7BCC5]">
+                                    Preparing to move block
+                                  </div>,
+                                  { isProcessing: true }
                                 );
-                              case "input-available":
-                                return (
-                                  <div key={index} className="text-yellow-400">
-                                    🍞 Chopping track "{part.input.trackId}"
-                                    (max {part.input.maxChops} chops,{" "}
+                              }
+                              if (includeInputAvailable) {
+                                makeRow(
+                                  "input-available",
+                                  <div className="text-[#B7BCC5]">
+                                    Moving block "{part.input.blockId}" to
+                                    measure {part.input.newStartTime}
+                                  </div>,
+                                  { isProcessing: true }
+                                );
+                              }
+                              if (isSuccess) {
+                                makeRow(
+                                  "output-available",
+                                  <div className="text-[#B7BCC5]">
+                                    {part.output}
+                                  </div>,
+                                  { isComplete: true }
+                                );
+                              }
+                              if (isError) {
+                                makeRow(
+                                  "output-error",
+                                  <div className="text-[#B7BCC5]">
+                                    Error: {part.errorText}
+                                  </div>,
+                                  { isProcessing: false }
+                                );
+                              }
+                              return;
+                            }
+
+                            if (part.type === "tool-chopAudio") {
+                              if (includeStreaming) {
+                                makeRow(
+                                  "input-streaming",
+                                  <div className="text-[#B7BCC5]">
+                                    Preparing to chop audio
+                                  </div>,
+                                  { isProcessing: true }
+                                );
+                              }
+                              if (includeInputAvailable) {
+                                makeRow(
+                                  "input-available",
+                                  <div className="text-[#B7BCC5]">
+                                    Chopping track "{part.input.trackId}" (max{" "}
+                                    {part.input.maxChops} chops,{" "}
                                     {part.input.nClusters} clusters,{" "}
-                                    {part.input.defaultLength}s length)...
-                                  </div>
+                                    {part.input.defaultLength}s length)
+                                  </div>,
+                                  { isProcessing: true }
                                 );
-                              case "output-available":
-                                return (
-                                  <div key={index} className="text-green-400">
-                                    ✅ {part.output}
-                                  </div>
+                              }
+                              if (isSuccess) {
+                                makeRow(
+                                  "output-available",
+                                  <div className="text-[#B7BCC5]">
+                                    {part.output}
+                                  </div>,
+                                  { isComplete: true }
                                 );
-                              case "output-error":
-                                return (
-                                  <div key={index} className="text-red-400">
-                                    ❌ Error: {part.errorText}
-                                  </div>
+                              }
+                              if (isError) {
+                                makeRow(
+                                  "output-error",
+                                  <div className="text-[#B7BCC5]">
+                                    Error: {part.errorText}
+                                  </div>,
+                                  { isProcessing: false }
                                 );
+                              }
+                              return;
                             }
-                            break;
-                          case "tool-adjustSpeed":
-                            switch (part.state) {
-                              case "input-streaming":
-                                return (
-                                  <div key={index} className="text-yellow-400">
-                                    🏃 Preparing to adjust speed...
-                                  </div>
+
+                            if (part.type === "tool-adjustSpeed") {
+                              if (includeStreaming) {
+                                makeRow(
+                                  "input-streaming",
+                                  <div className="text-[#B7BCC5]">
+                                    Preparing to adjust speed
+                                  </div>,
+                                  { isProcessing: true }
                                 );
-                              case "input-available":
-                                return (
-                                  <div key={index} className="text-yellow-400">
-                                    🏃 Adjusting speed of block "
+                              }
+                              if (includeInputAvailable) {
+                                makeRow(
+                                  "input-available",
+                                  <div className="text-[#B7BCC5]">
+                                    Adjusting speed of block "
                                     {part.input.blockId}" to{" "}
-                                    {part.input.speedFactor}x speed...
-                                  </div>
+                                    {part.input.speedFactor}x speed
+                                  </div>,
+                                  { isProcessing: true }
                                 );
-                              case "output-available":
-                                return (
-                                  <div key={index} className="text-green-400">
-                                    ✅ {part.output}
-                                  </div>
+                              }
+                              if (isSuccess) {
+                                makeRow(
+                                  "output-available",
+                                  <div className="text-[#B7BCC5]">
+                                    {part.output}
+                                  </div>,
+                                  { isComplete: true }
                                 );
-                              case "output-error":
-                                return (
-                                  <div key={index} className="text-red-400">
-                                    ❌ Error: {part.errorText}
-                                  </div>
+                              }
+                              if (isError) {
+                                makeRow(
+                                  "output-error",
+                                  <div className="text-[#B7BCC5]">
+                                    Error: {part.errorText}
+                                  </div>,
+                                  { isProcessing: false }
                                 );
+                              }
+                              return;
                             }
-                            break;
-                          case "step-start":
-                            return index > 0 ? (
-                              <div
-                                key={index}
-                                className="border-t border-gray-600 pt-2 mt-2"
-                              />
-                            ) : null;
-                          default:
-                            return null;
-                        }
-                      })}
+                          });
+
+                          return rows.map((row, flatIndex) => {
+                            const isLast = flatIndex === rows.length - 1;
+                            const isComplete = row.isComplete;
+                            const isProcessing = row.isProcessing;
+                            return (
+                              <div key={row.key} className="space-y-2">
+                                <div className="flex">
+                                  <div className="flex flex-col items-center mr-4">
+                                    <div
+                                      className={`w-3 h-3 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${
+                                        isComplete
+                                          ? "border-green-400/60"
+                                          : "border-opacity-60"
+                                      }`}
+                                      style={{
+                                        borderColor: isComplete
+                                          ? undefined
+                                          : "rgba(250, 204, 21, 0.6)",
+                                        backgroundColor: isComplete
+                                          ? "rgba(34, 197, 94, 0.2)"
+                                          : "rgba(250, 204, 21, 0.3)",
+                                      }}
+                                    >
+                                      {isComplete && (
+                                        <div className="w-1.5 h-1.5 rounded-full bg-green-400/80" />
+                                      )}
+                                      {isProcessing && (
+                                        <div
+                                          className="w-1.5 h-1.5 rounded-full animate-pulse"
+                                          style={{
+                                            backgroundColor:
+                                              "rgba(250, 204, 21, 0.8)",
+                                          }}
+                                        />
+                                      )}
+                                    </div>
+                                    <div
+                                      className="w-px flex-1 rounded-full mx-auto"
+                                      style={{
+                                        backgroundColor: isComplete
+                                          ? "rgba(34, 197, 94, 0.2)"
+                                          : "rgba(250, 204, 21, 0.2)",
+                                        minHeight: 0,
+                                      }}
+                                    />
+                                  </div>
+                                  <div className="flex-1 flex items-start">
+                                    {row.content}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          });
+                        })()}
+                      </div>
                     </div>
-                  </div>
-                ))}
-                {isLoading && (
-                  <div className="bg-gray-500/20 border border-gray-500/30 mr-8 p-3 rounded-lg">
-                    <div className="text-sm text-gray-300 font-medium mb-1">
-                      Lavoe Agent
-                    </div>
-                    <div className="flex items-center gap-2 text-gray-400 text-sm">
-                      <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
-                      Thinking...
-                    </div>
-                  </div>
-                )}
+                  );
+                })}
               </div>
             )}
           </div>
