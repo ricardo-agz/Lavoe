@@ -869,8 +869,7 @@ export default function BeatMaker() {
 
       // Update block duration once audio metadata loads
       audioElement.addEventListener("loadedmetadata", () => {
-        const audioDurationInMeasures =
-          (audioElement.duration / 60) * (bpm / 4); // Convert to measures based on BPM
+        const audioDurationInMeasures = (audioElement.duration / 60) * bpm; // Convert to measures based on BPM
         setBlocks((prevBlocks) =>
           prevBlocks.map((block) =>
             block.id === newBlock.id
@@ -959,8 +958,7 @@ export default function BeatMaker() {
 
       // Update block duration once audio metadata loads
       audioElement.addEventListener("loadedmetadata", () => {
-        const audioDurationInMeasures =
-          (audioElement.duration / 60) * (bpm / 4); // Convert to measures based on BPM
+        const audioDurationInMeasures = (audioElement.duration / 60) * bpm; // Convert to measures based on BPM
         setBlocks((prevBlocks) =>
           prevBlocks.map((block) =>
             block.id === newBlock.id
@@ -1077,7 +1075,7 @@ export default function BeatMaker() {
 
       // Update the block with the new track ID and adjust duration
       audioElement.addEventListener("loadedmetadata", () => {
-        const newDurationInMeasures = (audioElement.duration / 60) * (bpm / 4);
+        const newDurationInMeasures = (audioElement.duration / 60) * bpm;
 
         setBlocks((prevBlocks) =>
           prevBlocks.map((b) =>
