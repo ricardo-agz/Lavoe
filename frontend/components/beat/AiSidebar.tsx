@@ -674,18 +674,7 @@ export default function AiSidebar({
                               });
                             };
 
-                            if (part.type === "text") {
-                              makeRow(
-                                "text",
-                                <StreamingText
-                                  className="text-[#B7BCC5]"
-                                  text={part.text}
-                                  active={isStreamingForThis}
-                                />,
-                                { isProcessing: false }
-                              );
-                              return;
-                            }
+                            // Text accumulation is handled after the loop for natural streaming
 
                             const includeStreaming =
                               part.state === "input-streaming" ||
@@ -827,6 +816,28 @@ export default function AiSidebar({
                               return;
                             }
                           });
+
+                          // After collecting tool rows, add a single text row that accumulates all text parts
+                          let accumulatedText = "";
+                          message.parts?.forEach((p: any) => {
+                            if (p.type === "text") {
+                              accumulatedText += p.text || "";
+                            } else if (p.type === "text-delta") {
+                              accumulatedText += p.textDelta || p.delta || "";
+                            }
+                          });
+                          if (accumulatedText.trim().length > 0) {
+                            rows.push({
+                              key: `${message.id}-text-accum`,
+                              content: (
+                                <div className="text-[#B7BCC5] whitespace-pre-wrap break-words">
+                                  {accumulatedText}
+                                </div>
+                              ),
+                              isComplete: false,
+                              isProcessing: !!isStreamingForThis,
+                            });
+                          }
 
                           return rows.map((row, flatIndex) => {
                             const isLast = flatIndex === rows.length - 1;
