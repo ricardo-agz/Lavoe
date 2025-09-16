@@ -1100,6 +1100,37 @@ export default function BeatMaker() {
     }
   };
 
+  const handleLoop = (blockId: string, times: number) => {
+    console.log(`🔄 Looping block ${blockId} ${times} times`);
+    
+    // Use the functional form of setBlocks to access current state
+    setBlocks(prevBlocks => {
+      const originalBlock = prevBlocks.find(block => block.id === blockId);
+      if (!originalBlock) {
+        console.error(`Block ${blockId} not found in current blocks:`, prevBlocks.map(b => b.id));
+        return prevBlocks; // Return unchanged state
+      }
+
+      const newBlocks: MusicBlock[] = [];
+      
+      // Create the specified number of copies
+      for (let i = 1; i <= times; i++) {
+        const newBlock: MusicBlock = {
+          ...originalBlock,
+          id: `${originalBlock.id}-loop-${i}-${Date.now()}`,
+          name: `${originalBlock.name} (Loop ${i})`,
+          startTime: originalBlock.startTime + (originalBlock.duration * i),
+        };
+        newBlocks.push(newBlock);
+      }
+
+      console.log(`✅ Created ${times} loops of block ${blockId}`);
+      
+      // Return the updated state with new blocks added
+      return [...prevBlocks, ...newBlocks];
+    });
+  };
+
   const handleDeleteSelectedBlock = () => {
     if (!selectedBlock) return;
 
@@ -1210,6 +1241,7 @@ export default function BeatMaker() {
           );
         }}
         onSpeedAdjust={handleSpeedAdjust}
+        onLoop={handleLoop}
         // Receive agent busy status from AiSidebar
         onAgentBusyChange={(busy: boolean) => setAgentBusy(busy)}
         onAddChopsToEditor={async (chops: any[], originalTrackName: string) => {

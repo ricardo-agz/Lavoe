@@ -38,6 +38,16 @@ const adjustSpeed = tool({
   // No execute function - this is handled client-side
 });
 
+// Tool for looping/duplicating blocks (client-side only)
+const loop = tool({
+  description: 'Loop/duplicate a music block multiple times, placing each copy right after the previous one on the timeline. Useful for creating repetitive patterns or extending musical phrases.',
+  inputSchema: z.object({
+    blockId: z.string().describe('The ID of the block to loop'),
+    times: z.number().min(1).max(10).describe('Number of times to loop the block (1-10)'),
+  }),
+  // No execute function - this is handled client-side
+});
+
 export async function POST(req: NextRequest) {
   console.log("POST request received")
   try {
@@ -79,6 +89,7 @@ ${blocks.map((block: any) => `- Block "${block.name}" (ID: ${block.id}) at time 
         moveBlock,
         chopAudio,
         adjustSpeed,
+        loop,
       },
       system: `You are Lavoe Agent, an AI assistant specialized in editing and arranging music compositions. You can help users rearrange their music by moving blocks around the timeline.
 
@@ -89,21 +100,25 @@ ${blocksContext}
 1. **Move Block** - Move any block to a new start time position on the timeline
 2. **Chop Audio** - Chop an audio track into segments based on onset detection, automatically adding the chops to the timeline
 3. **Adjust Speed** - Speed up or slow down an audio block while maintaining pitch (creates a new track and updates the block in place)
+4. **Loop** - Duplicate a block multiple times, placing each copy right after the previous one
 
 **Instructions:**
 - Help users rearrange their music composition by moving blocks
 - Use chopAudio to break down complex audio into manageable segments (use the track ID, not track index)
 - Use adjustSpeed to speed up or slow down blocks (1.0 = normal, 2.0 = 2x faster, 0.5 = 2x slower)
+- Use loop to duplicate blocks multiple times, creating repetitive patterns
 - Always refer to blocks by their name and ID for clarity
 - When suggesting moves, consider musical timing and structure
 - Explain your reasoning for block placement suggestions
 - Be conversational and helpful with music arrangement advice
 - Timeline is measured in measures (beats), with each measure representing a musical unit
-- Always confirm the action you're taking when moving, chopping, or adjusting blocks
+- Always confirm the action you're taking when moving, chopping, adjusting, or looping blocks
 - When chopping audio, explain what you're doing and why the parameters were chosen (default: 6 max chops, 3 clusters)
 - When adjusting speed, explain the effect (faster/slower) and why you chose that speed factor
+- When looping blocks, explain how many copies you're creating and why
 - For chopAudio tool, use the track ID (not track index) from the block information
 - For adjustSpeed tool, use the block ID (the tool will automatically handle finding the track)
+- For loop tool, use the block ID and specify how many times to repeat it (1-10 times)
 
 **Examples of what you can help with:**
 - "Move the drums to start at measure 8"
@@ -112,6 +127,9 @@ ${blocksContext}
 - "Speed up the bass line to make it more energetic"
 - "Slow down the drums to half speed"
 - "Make this block 2x faster"
+- "Loop the drum pattern 4 times"
+- "Repeat this melody 3 times"
+- "Create a loop of this bass line"
 - "Rearrange the composition to have a better flow"
 - "Break down this audio and arrange the pieces"
 

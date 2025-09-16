@@ -28,7 +28,7 @@ import { DefaultChatTransport } from "ai";
 // Enhanced AI Response UI components (UI-only; does not alter streaming logic)
 interface ToolOperation {
   id: string;
-  type: "moveBlock" | "chopAudio" | "adjustSpeed" | "text";
+  type: "moveBlock" | "chopAudio" | "adjustSpeed" | "loop" | "text";
   state:
     | "input-streaming"
     | "input-available"
@@ -124,6 +124,11 @@ const OperationCard = ({
           return `Adjusting speed of block "${operation.input.blockId}" to ${operation.input.speedFactor}x`;
         }
         return "Preparing to adjust speed...";
+      case "loop":
+        if (operation.state === "input-available" && operation.input) {
+          return `Looping block "${operation.input.blockId}" ${operation.input.times} times`;
+        }
+        return "Preparing to loop block...";
       case "text":
         return operation.text || "Processing text...";
       default:
@@ -260,6 +265,7 @@ export interface AiSidebarProps {
   onBlockMove?: (blockId: string, newTime: number) => void;
   onAddChopsToEditor?: (chops: any[], originalTrackName: string) => void;
   onSpeedAdjust?: (blockId: string, speedFactor: number) => void;
+  onLoop?: (blockId: string, times: number) => void;
   onAgentBusyChange?: (busy: boolean) => void;
 }
 
@@ -275,6 +281,7 @@ export default function AiSidebar({
   onBlockMove,
   onAddChopsToEditor,
   onSpeedAdjust,
+  onLoop,
   onAgentBusyChange,
 }: AiSidebarProps) {
   const [mode, setMode] = useState<"beat" | "agent">("beat");
@@ -362,6 +369,24 @@ export default function AiSidebar({
 
         // Execute the speed adjustment
         handleSpeedAdjust(blockId, speedFactor, toolCall.toolCallId);
+      }
+
+      if (toolCall.toolName === "loop" && onLoop) {
+        const { blockId, times } = toolCall.input as {
+          blockId: string;
+          times: number;
+        };
+        console.log(`🔄 Looping block ${blockId} ${times} times`);
+
+        // Execute the loop operation
+        onLoop(blockId, times);
+
+        // Add the tool result
+        addToolResult({
+          tool: "loop",
+          toolCallId: toolCall.toolCallId,
+          output: `Successfully looped block "${blockId}" ${times} times`,
+        });
       }
     },
     onFinish: ({ message }) => {
@@ -619,6 +644,17 @@ export default function AiSidebar({
                         });
                         return;
                       }
+                      if (part.type === "tool-loop") {
+                        ops.push({
+                          id: `${message.id}-${index}`,
+                          type: "loop",
+                          state: part.state,
+                          input: part.input,
+                          output: part.output,
+                          errorText: part.errorText,
+                        });
+                        return;
+                      }
                       // Ignore other internal parts (e.g., step-start)
                     });
                     return ops;
@@ -791,6 +827,46 @@ export default function AiSidebar({
                                     Adjusting speed of block "
                                     {part.input.blockId}" to{" "}
                                     {part.input.speedFactor}x speed
+                                  </div>,
+                                  { isProcessing: true }
+                                );
+                              }
+                              if (isSuccess) {
+                                makeRow(
+                                  "output-available",
+                                  <div className="text-[#B7BCC5]">
+                                    {part.output}
+                                  </div>,
+                                  { isComplete: true }
+                                );
+                              }
+                              if (isError) {
+                                makeRow(
+                                  "output-error",
+                                  <div className="text-[#B7BCC5]">
+                                    Error: {part.errorText}
+                                  </div>,
+                                  { isProcessing: false }
+                                );
+                              }
+                              return;
+                            }
+
+                            if (part.type === "tool-loop") {
+                              if (includeStreaming) {
+                                makeRow(
+                                  "input-streaming",
+                                  <div className="text-[#B7BCC5]">
+                                    Preparing to loop block
+                                  </div>,
+                                  { isProcessing: true }
+                                );
+                              }
+                              if (includeInputAvailable) {
+                                makeRow(
+                                  "input-available",
+                                  <div className="text-[#B7BCC5]">
+                                    Looping block "{part.input.blockId}" {part.input.times} times
                                   </div>,
                                   { isProcessing: true }
                                 );
