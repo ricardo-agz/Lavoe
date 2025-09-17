@@ -1,5 +1,8 @@
 # Lavoe - Cursor for music production
 
+[![Watch the demo](https://img.youtube.com/vi/lt1V2GFGO3k/maxresdefault.jpg)](https://youtu.be/lt1V2GFGO3k)
+
+
 ## Inspiration
 
 lavoe comes from the simple desire to make music - lower the barrier for music production access - with ai everyone's abilites are enhanced but when it comes to the creative industry tech doesnt give it as much attention we want to make it easieer for others to express themselves and we want to make the first stedp towards this facilitating music production.
