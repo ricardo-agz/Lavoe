@@ -13,6 +13,7 @@ export function MusicLoadingState({
 }: MusicLoadingStateProps) {
   const [stage, setStage] = useState<"analyzing" | "crafting">("analyzing");
   const [currentColorIndex, setCurrentColorIndex] = useState(0);
+  const [messageIndex, setMessageIndex] = useState(0);
 
   const colors = [
     "rgba(255,165,0,0.08)",
@@ -48,6 +49,37 @@ export function MusicLoadingState({
     }, 800);
     return () => clearInterval(id);
   }, [stage, colors.length]);
+
+  // Alternate displayed messages within each stage
+  useEffect(() => {
+    const intervalMs = stage === "analyzing" ? 1200 : 1400;
+    const id = setInterval(() => {
+      setMessageIndex((prev) => prev + 1);
+    }, intervalMs);
+    return () => clearInterval(id);
+  }, [stage]);
+
+  const analyzingMessages = [
+    "Analyzing your prompt...",
+    "Understanding style and mood...",
+    "Inferring structure and BPM...",
+  ];
+  const analyzingSubtexts = [
+    "Understanding your musical vision",
+    "Extracting keywords and genres",
+    "Preparing composition plan",
+  ];
+
+  const craftingMessages = [
+    "Crafting your beat...",
+    "Generating stems and arrangement...",
+    "Polishing mix and timing...",
+  ];
+  const craftingSubtexts = [
+    "Generating your unique beat",
+    "Designing patterns and layers",
+    "Finalizing audio",
+  ];
 
   return (
     <div className={`flex flex-col items-center space-y-4 py-6 ${className}`}>
@@ -141,13 +173,13 @@ export function MusicLoadingState({
       <div className="text-center">
         <p className="text-sm font-medium text-white/30">
           {stage === "analyzing"
-            ? "Analyzing your prompt..."
-            : "Crafting your beat..."}
+            ? analyzingMessages[messageIndex % analyzingMessages.length]
+            : craftingMessages[messageIndex % craftingMessages.length]}
         </p>
         <p className="text-xs text-gray-400/40 mt-1">
           {stage === "analyzing"
-            ? "Understanding your musical vision"
-            : "Generating your unique beat"}
+            ? analyzingSubtexts[messageIndex % analyzingSubtexts.length]
+            : craftingSubtexts[messageIndex % craftingSubtexts.length]}
         </p>
       </div>
     </div>

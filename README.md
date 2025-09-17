@@ -26,8 +26,6 @@ lavoe comes from the simple desire to make music - lower the barrier for music p
 - pandas
 - sklearn
 
-# How to set it up locally
-
 ### Lavoe — Local Development Guide
 
 This guide explains how to run the backend (FastAPI) and the frontend (Next.js) locally.

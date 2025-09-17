@@ -594,7 +594,11 @@ export default function AiSidebar({
         </div>
 
         <TabsContent value="chat" className="flex-1 m-0 flex flex-col min-h-0">
-          <div className="flex-1 p-4 space-y-4 overflow-y-auto">
+          <div
+            className={`flex-1 p-4 space-y-4 overflow-y-auto ${
+              mode === "beat" && isGeneratingTrack ? "flex" : ""
+            }`}
+          >
             {/* Show agent chat messages when in agent mode (Enhanced UI) */}
             {mode === "agent" && messages.length > 0 && (
               <div className="space-y-3">
@@ -866,7 +870,8 @@ export default function AiSidebar({
                                 makeRow(
                                   "input-available",
                                   <div className="text-[#B7BCC5]">
-                                    Looping block "{part.input.blockId}" {part.input.times} times
+                                    Looping block "{part.input.blockId}"{" "}
+                                    {part.input.times} times
                                   </div>,
                                   { isProcessing: true }
                                 );
@@ -973,6 +978,13 @@ export default function AiSidebar({
                     </div>
                   );
                 })}
+              </div>
+            )}
+
+            {/* Show music loading state during beat generation */}
+            {mode === "beat" && isGeneratingTrack && (
+              <div className="m-auto">
+                <MusicLoadingState className="py-4" />
               </div>
             )}
           </div>
