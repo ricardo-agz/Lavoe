@@ -12,6 +12,8 @@ const initialTracks: Track[] = [];
 
 const initialBlocks: MusicBlock[] = [];
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
+
 const TIMELINE_WIDTH = 800;
 const TIMELINE_MEASURES = 64; // measures instead of seconds
 const PIXELS_PER_MEASURE = TIMELINE_WIDTH / TIMELINE_MEASURES;
@@ -366,7 +368,7 @@ export default function BeatMaker() {
 
       // Start track generation
       const response = await fetch(
-        "http://localhost:8000/start_track_generation",
+        `${API_BASE_URL}/start_track_generation`,
         {
           method: "POST",
           headers: {
@@ -411,7 +413,7 @@ export default function BeatMaker() {
         attempts++;
 
         const response = await fetch(
-          `http://localhost:8000/get_generated_track?task_id=${taskId}`
+          `${API_BASE_URL}/get_generated_track?task_id=${taskId}`
         );
 
         if (!response.ok) {
@@ -493,7 +495,7 @@ export default function BeatMaker() {
 
       // Start track generation
       const response = await fetch(
-        "http://localhost:8000/start_mubert_generation",
+        `${API_BASE_URL}/start_mubert_generation`,
         {
           method: "POST",
           headers: {
@@ -546,7 +548,7 @@ export default function BeatMaker() {
         attempts++;
 
         const response = await fetch(
-          `http://localhost:8000/get_mubert_track?track_id=${trackId}`
+          `${API_BASE_URL}/get_mubert_track?track_id=${trackId}`
         );
 
         if (!response.ok) {
@@ -689,7 +691,7 @@ export default function BeatMaker() {
       const formData = new FormData();
       formData.append("file", file);
 
-      const response = await fetch("http://localhost:8000/upload-audio", {
+      const response = await fetch(`${API_BASE_URL}/upload-audio`, {
         method: "POST",
         body: formData,
       });
@@ -780,7 +782,7 @@ export default function BeatMaker() {
       const formData = new FormData();
       formData.append("file", audioBlob, `${trackName}.wav`);
 
-      const response = await fetch("http://localhost:8000/upload-audio", {
+      const response = await fetch(`${API_BASE_URL}/upload-audio`, {
         method: "POST",
         body: formData,
       });
@@ -888,7 +890,7 @@ export default function BeatMaker() {
     try {
       // Download the track from the backend
       const response = await fetch(
-        `http://localhost:8000/tracks/${trackId}/download`
+        `${API_BASE_URL}/tracks/${trackId}/download`
       );
       if (!response.ok) {
         throw new Error("Failed to download track");
@@ -1016,7 +1018,7 @@ export default function BeatMaker() {
 
     try {
       // Call the backend speed adjustment endpoint
-      const response = await fetch(`http://localhost:8000/process/speed`, {
+      const response = await fetch(`${API_BASE_URL}/process/speed`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1036,7 +1038,7 @@ export default function BeatMaker() {
 
       // Download the new track
       const trackResponse = await fetch(
-        `http://localhost:8000/tracks/${result.track_id}/download`
+        `${API_BASE_URL}/tracks/${result.track_id}/download`
       );
       if (!trackResponse.ok) {
         throw new Error(
@@ -1277,7 +1279,7 @@ export default function BeatMaker() {
                 `🎵 Downloading chop ${index + 1} audio (ID: ${chop.track_id})`
               );
               const response = await fetch(
-                `http://localhost:8000/tracks/${chop.track_id}/download`
+                `${API_BASE_URL}/tracks/${chop.track_id}/download`
               );
 
               if (response.ok) {

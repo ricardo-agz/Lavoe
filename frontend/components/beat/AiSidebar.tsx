@@ -25,6 +25,8 @@ import { openai } from "@ai-sdk/openai";
 import { MusicBlock } from "./types";
 import { DefaultChatTransport } from "ai";
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
+
 // Enhanced AI Response UI components (UI-only; does not alter streaming logic)
 interface ToolOperation {
   id: string;
@@ -475,7 +477,7 @@ export default function AiSidebar({
       console.log(`🍞 Starting chop operation for track ${trackId}`);
 
       // Call the backend chop endpoint
-      const response = await fetch(`http://localhost:8000/process/chop-audio`, {
+      const response = await fetch(`${API_BASE_URL}/process/chop-audio`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
